@@ -16,6 +16,8 @@ read_globals = {
 	"CreateFrame",
 	"GetBuildInfo",
 	"GetLocale",
+	"GetRealmName",
+	"UnitName",
 	"GetAddOnMemoryUsage",
 	"UpdateAddOnMemoryUsage",
 	"geterrorhandler",
