@@ -13,3 +13,4 @@ ignore:
   - .editorconfig
   - .github
   - .luacheckrc
+  - tests
