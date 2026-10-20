@@ -1,0 +1,11 @@
+package-as: SempreUI
+
+move-folders:
+  SempreUI/Sempre: Sempre
+
+ignore:
+  - README.md
+  - CONTRIBUTING.md
+  - CLAUDE.md
+  - .github
+  - .luacheckrc
