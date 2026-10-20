@@ -1,6 +1,7 @@
 stds.wow = { read_globals = { table = { fields = { "wipe" } } } }
 std = "lua51+wow"
 max_line_length = false
+self = false
 exclude_files = { "libs/", ".release/" }
 
 globals = {
