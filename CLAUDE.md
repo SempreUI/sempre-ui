@@ -22,7 +22,10 @@ Mainline 12.x, TOC `## Interface: 16001`). TOC files carry no client suffix
   `## X-Sempre-Module: 1` and `## X-Sempre-Budget-KB: <n>`, plus its own
   `move-folders` line in `.pkgmeta`. The optional line
   `## X-Sempre-LoadWith: Login` makes the core load the module right after
-  login; use it only for engines that must always be current. The core `Sempre` stays under 300 KB.
+  login; use it only for engines that must always be current. Such a module is
+  loaded from inside `PLAYER_LOGIN`, so it never sees that event: do its login
+  work in its own `ADDON_LOADED`, where `SempreUI.charKey` is already set.
+  The core `Sempre` stays under 300 KB.
 - No globals except the addon table `SempreUI` and SavedVariables.
 - Small commits, one topic each, English commit messages.
 - Commit as `SempreUI <SempreUI@users.noreply.github.com>`. No `Co-Authored-By` or `Claude-Session` trailers, no mention of the AI in commits.
