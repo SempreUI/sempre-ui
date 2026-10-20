@@ -214,18 +214,49 @@ S.ModuleList = moduleList
 -- GetAddOnMemoryUsage, which bills tables to whichever addon created them.
 local loadCost = {}
 
--- A loaded module cannot be unloaded; switching one off takes a /reload.
-function S:LoadModule(name)
+-- Loads without touching the enable state, so the login path can never switch
+-- on a module the player switched off.
+local function loadOnly(name)
 	if C_AddOns.IsAddOnLoaded(name) then return true end
-	C_AddOns.EnableAddOn(name, UnitName("player"))
 	local before = collectgarbage("count")
 	local loaded, reason = C_AddOns.LoadAddOn(name)
 	if loaded then
 		loadCost[name] = collectgarbage("count") - before
 	else
-		self:Print(L.MODULE_FAILED, name, tostring(reason))
+		S:Print(L.MODULE_FAILED, name, tostring(reason))
 	end
 	return loaded
+end
+
+-- A loaded module cannot be unloaded; switching one off takes a /reload.
+-- Asking for a module switches it on for this character first.
+function S:LoadModule(name)
+	if C_AddOns.IsAddOnLoaded(name) then return true end
+	C_AddOns.EnableAddOn(name, UnitName("player"))
+	return loadOnly(name)
+end
+
+-- Assumption: GetAddOnEnableState(addon, character) returns a number (0 none,
+-- 1 some, 2 all) or an Enum.AddOnEnableState value; anything above 0 is on.
+-- A missing function or a nil result counts as enabled.
+local function isEnabled(name, char)
+	if not C_AddOns.GetAddOnEnableState then return true end
+	local state = C_AddOns.GetAddOnEnableState(name, char)
+	if type(state) ~= "number" then return state ~= false end
+	return state > 0
+end
+
+-- Modules with "## X-Sempre-LoadWith: Login" load right after login, in
+-- alphabetical order, if the player has not switched them off.
+local function loadLoginModules()
+	local char = UnitName("player")
+	for _, name in ipairs(moduleList()) do
+		if name ~= ADDON_NAME
+			and C_AddOns.GetAddOnMetadata(name, "X-Sempre-LoadWith") == "Login"
+			and isEnabled(name, char) then
+			loadOnly(name)
+		end
+	end
 end
 
 -- /sempre perf
@@ -297,5 +328,6 @@ S:On("PLAYER_LOGIN", function()
 	S.charKey = format("%s-%s", UnitName("player"), GetRealmName())
 	S.db.chars[S.charKey] = S.db.chars[S.charKey] or {}
 	S.char = S.db.chars[S.charKey]
+	loadLoginModules()
 	S:Print("%s %s", S.version, L.LOADED)
 end)
