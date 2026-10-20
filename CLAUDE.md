@@ -6,8 +6,11 @@ Mainline 12.x, TOC `## Interface: 16001`). TOC files carry no client suffix
 
 ## Hard rules
 
-- Never copy code from other addons, whatever their license. You may read
-  them to understand a problem; write the solution from scratch.
+- Never copy code from other addons, whatever their license. Studying them is
+  allowed, but only through the two-session rule below.
+- Every Lua file starts with:
+  `-- Copyright (C) 2026 SempreUI` and
+  `-- SPDX-License-Identifier: GPL-3.0-only, with additional terms in NAMING.md`
 - Forever applies the Midnight addon restrictions: secret values (health,
   names, GUIDs, threat in combat), no `COMBAT_LOG_EVENT_UNFILTERED`. Display is
   allowed; logic, comparisons or arithmetic on secret values are not. Check
@@ -21,6 +24,20 @@ Mainline 12.x, TOC `## Interface: 16001`). TOC files carry no client suffix
 - No globals except the addon table `SempreUI` and SavedVariables.
 - Small commits, one topic each, English commit messages.
 - Commit as `SempreUI <SempreUI@users.noreply.github.com>`. No `Co-Authored-By` or `Claude-Session` trailers, no mention of the AI in commits.
+
+## Workflow: brief, then build
+
+1. **Brief** (planning session, strongest model): reads the concept, the
+   relevant Blizzard API docs and, if useful, other addons' code. Writes
+   `docs/briefings/<module>.md`: behaviour, data layout, events, edge cases,
+   Forever restrictions, acceptance checks. No code lines, no identifiers or
+   structure copied from other addons.
+2. **Build** (separate session or agent that never sees foreign code): gets
+   only the briefing, this file and the repo. Writes the code and tests.
+3. **Review** (separate session): checks the result against the briefing,
+   ranks findings P1 to P3.
+4. **Learn**: every mistake that was found becomes a line in this file or in
+   `docs/solutions/`, so it is caught next time.
 
 ## Style
 

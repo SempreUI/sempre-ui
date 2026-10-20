@@ -1,3 +1,6 @@
+-- Copyright (C) 2026 SempreUI
+-- SPDX-License-Identifier: GPL-3.0-only, with additional terms in NAMING.md
+
 -- SempreUI core: event bus, saved settings, module loader, slash commands.
 -- Always loaded, so it stays small. Everything else lives in LoadOnDemand modules.
 
