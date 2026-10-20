@@ -18,6 +18,7 @@ Mainline 12.x, TOC `## Interface: 16001`, TOC suffix `_Camelot.toc`).
   and `## X-Sempre-Budget-KB: <n>`. The core `Sempre` stays under 300 KB.
 - No globals except the addon table `SempreUI` and SavedVariables.
 - Small commits, one topic each, English commit messages.
+- Commit as `SempreUI <SempreUI@users.noreply.github.com>`. No `Co-Authored-By` trailers.
 
 ## Style
 
