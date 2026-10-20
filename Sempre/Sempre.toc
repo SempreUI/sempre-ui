@@ -1,8 +1,7 @@
 ## Interface: 16001
 ## Title: |cffc8794aSempre|rUI
-## Notes: Leichte, modulare Oberfläche für WoW: Forever. /sempre
+## Notes: Lightweight, modular UI for WoW: Forever. /sempre
 ## Notes-deDE: Leichte, modulare Oberfläche für WoW: Forever. /sempre
-## Notes-enUS: Lightweight, modular UI for WoW: Forever. /sempre
 ## Author: SempreUI
 ## Version: @project-version@
 ## SavedVariables: SempreDB

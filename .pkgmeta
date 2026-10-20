@@ -1,5 +1,6 @@
 package-as: SempreUI
 
+# Every module needs its own line here.
 move-folders:
   SempreUI/Sempre: Sempre
 
@@ -7,5 +8,8 @@ ignore:
   - README.md
   - CONTRIBUTING.md
   - CLAUDE.md
+  - LICENSE
+  - NAMING.md
+  - .editorconfig
   - .github
   - .luacheckrc
