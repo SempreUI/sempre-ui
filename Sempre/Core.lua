@@ -1,7 +1,7 @@
 -- Copyright (C) 2026 SempreUI
 -- SPDX-License-Identifier: GPL-3.0-only, with additional terms in NAMING.md
 
--- SempreUI core: event bus, saved settings, module loader, slash commands.
+-- SempreUI core: event and message bus, saved settings, module loader, slash commands.
 -- Always loaded, so it stays small. Everything else lives in LoadOnDemand modules.
 
 local ADDON_NAME = ...
@@ -54,43 +54,18 @@ function S:Print(msg, ...)
 	print("|cffc8794aSempre|r " .. tostring(msg))
 end
 
--- Event bus: one frame, one handler list per event.
+-- Handler lists shared by the event bus and the message bus. A bus is a set of
+-- lists keyed by name. Removing only marks a slot (false); the slots are swept
+-- once the outermost run of that key has finished, so removing during a run,
+-- also during a nested run of the same key, never skips or repeats a handler.
+-- A run reads #list once, so handlers added during it wait for the next run.
 
-local frame = CreateFrame("Frame")
-local handlers = {}
-
--- Returns false when the client does not know the event, instead of erroring.
-function S:On(event, fn)
-	local list = handlers[event]
-	if not list then
-		if not pcall(frame.RegisterEvent, frame, event) then
-			self:Print(L.UNKNOWN_EVENT, event)
-			return false
-		end
-		list = {}
-		handlers[event] = list
-	end
-	list[#list + 1] = fn
-	return true
+local function newBus(eager)
+	return { lists = {}, dirty = {}, depth = {}, eager = eager }
 end
 
--- Off only marks the slot; the dispatcher compacts the list after it ran,
--- so removing a handler during its own event never skips the next one.
-local dirty = {}
-
-function S:Off(event, fn)
-	local list = handlers[event]
-	if not list then return end
-	for i = 1, #list do
-		if list[i] == fn then
-			list[i] = false
-			dirty[event] = true
-		end
-	end
-end
-
-local function compact(event)
-	local list = handlers[event]
+local function sweep(bus, key)
+	local list = bus.lists[key]
 	local n = 0
 	for i = 1, #list do
 		local fn = list[i]
@@ -100,25 +75,97 @@ local function compact(event)
 			list[n] = fn
 		end
 	end
-	dirty[event] = nil
+	bus.dirty[key] = nil
 	if n == 0 then
-		handlers[event] = nil
-		frame:UnregisterEvent(event)
+		bus.lists[key] = nil
+		return true
 	end
 end
 
-frame:SetScript("OnEvent", function(_, event, ...)
-	local list = handlers[event]
+local function busAdd(bus, key, fn)
+	local list = bus.lists[key]
+	if not list then
+		list = {}
+		bus.lists[key] = list
+	end
+	list[#list + 1] = fn
+end
+
+-- Returns true when the list ended up empty and was dropped (eager buses only).
+local function busRemove(bus, key, fn)
+	local list = bus.lists[key]
 	if not list then return end
+	for i = 1, #list do
+		if list[i] == fn then
+			list[i] = false
+			bus.dirty[key] = true
+		end
+	end
+	if bus.eager and bus.dirty[key] and not bus.depth[key] then
+		return sweep(bus, key)
+	end
+end
+
+-- Returns true when the sweep after the run dropped an empty list.
+local function busRun(bus, key, ...)
+	local list = bus.lists[key]
+	if not list then return end
+	local depth = (bus.depth[key] or 0) + 1
+	bus.depth[key] = depth
 	for i = 1, #list do
 		local fn = list[i]
 		if fn then
-			local ok, err = pcall(fn, event, ...)
-			if not ok then geterrorhandler()(err) end
+			local ok, err = pcall(fn, key, ...)
+			-- A throwing error handler must not leave the depth counter stuck.
+			if not ok then pcall(geterrorhandler(), err) end
 		end
 	end
-	if dirty[event] then compact(event) end
+	bus.depth[key] = depth > 1 and depth - 1 or nil
+	if depth == 1 and bus.dirty[key] then return sweep(bus, key) end
+end
+
+-- Event bus: one frame, one handler list per game event.
+
+local frame = CreateFrame("Frame")
+local events = newBus(false)
+
+-- Returns false when the client does not know the event, instead of erroring.
+function S:On(event, fn)
+	if not events.lists[event] and not pcall(frame.RegisterEvent, frame, event) then
+		self:Print(L.UNKNOWN_EVENT, event)
+		return false
+	end
+	busAdd(events, event, fn)
+	return true
+end
+
+-- Off only marks the slot; the dispatcher sweeps the list after it ran.
+function S:Off(event, fn)
+	busRemove(events, event, fn)
+end
+
+frame:SetScript("OnEvent", function(_, event, ...)
+	if busRun(events, event, ...) then frame:UnregisterEvent(event) end
 end)
+
+-- Message bus: modules tell each other about changes without knowing each
+-- other. Messages are plain strings (ITEMS_CHANGED) and never touch the frame,
+-- so a message named like a game event does not register that event.
+
+local messages = newBus(true)
+
+function S:Listen(msg, fn)
+	busAdd(messages, msg, fn)
+end
+
+function S:Unlisten(msg, fn)
+	busRemove(messages, msg, fn)
+end
+
+-- Synchronous; nobody listening costs one table lookup.
+function S:Send(msg, ...)
+	busRun(messages, msg, ...)
+end
 
 -- Saved settings with defaults.
 
