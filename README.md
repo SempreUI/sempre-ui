@@ -32,7 +32,3 @@ you use.
 GPLv3 with one additional term about the name, see [LICENSE](LICENSE) and
 [NAMING.md](NAMING.md).
 
----
-
-*Deutsch:* SempreUI ist eine leichte, modulare Oberfläche für WoW: Forever.
-Jedes Modul lädt nur, wenn du es einschaltest und es gebraucht wird.
