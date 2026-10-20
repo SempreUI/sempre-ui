@@ -20,7 +20,9 @@ Mainline 12.x, TOC `## Interface: 16001`). TOC files carry no client suffix
   the feature with a clear message instead of erroring.
 - One module = one addon folder `Sempre_<Name>` with `## LoadOnDemand: 1`,
   `## X-Sempre-Module: 1` and `## X-Sempre-Budget-KB: <n>`, plus its own
-  `move-folders` line in `.pkgmeta`. The core `Sempre` stays under 300 KB.
+  `move-folders` line in `.pkgmeta`. The optional line
+  `## X-Sempre-LoadWith: Login` makes the core load the module right after
+  login; use it only for engines that must always be current. The core `Sempre` stays under 300 KB.
 - No globals except the addon table `SempreUI` and SavedVariables.
 - Small commits, one topic each, English commit messages.
 - Commit as `SempreUI <SempreUI@users.noreply.github.com>`. No `Co-Authored-By` or `Claude-Session` trailers, no mention of the AI in commits.
@@ -45,6 +47,9 @@ Mainline 12.x, TOC `## Interface: 16001`). TOC files carry no client suffix
 - Lifecycle and low-frequency events go through `SempreUI:On(event, fn)`.
   High-frequency unit events (`UNIT_AURA` etc.) get the module's own frame with
   `RegisterUnitEvent`.
+- Modules talk to each other with `SempreUI:Send` / `SempreUI:Listen`, never by
+  calling each other's functions directly, except through a documented
+  read-only interface such as `SempreUI.Items`.
 - Hook Blizzard frames only from the module's own `ADDON_LOADED`, never later.
 - User-facing strings in German and English (`L` tables), German first.
 - Copper accent `0.78, 0.47, 0.29` (`#C8794A`).
@@ -59,3 +64,4 @@ Mainline 12.x, TOC `## Interface: 16001`). TOC files carry no client suffix
 ## Checks
 
 - `luacheck .` must be clean.
+- `lua5.1 tests/run.lua` must pass (see `tests/README.md`).
