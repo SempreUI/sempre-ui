@@ -209,8 +209,20 @@ do
 		env.fire(case[2])
 		env.pay(10)
 		env.fire(case[3])
+		env.clock = env.clock + 5
 		env.pay(10)
 		check(env.today().income[case[1]] == 10 and env.today().income.other == 10, "classic events: " .. case[1])
+	end
+end
+
+do
+	-- Money that arrives just after the trade or quest reward window closed.
+	for _, case in ipairs({ { "trade", "TRADE_SHOW", "TRADE_CLOSED" }, { "quest", "QUEST_COMPLETE", "QUEST_FINISHED" } }) do
+		local env = boot({ noInteraction = true })
+		env.fire(case[2])
+		env.fire(case[3])
+		env.pay(10)
+		check(env.today().income[case[1]] == 10, "money right after closing: " .. case[1])
 	end
 end
 
