@@ -20,7 +20,7 @@ end
 
 -- Loads a fresh copy of the core into its own environment.
 -- addons: name -> { meta = {}, enabled = number|nil, fail = bool }
-local function boot(addons)
+local function boot(addons, setup)
 	addons = addons or {}
 	local names = {}
 	for name in pairs(addons) do names[#names + 1] = name end
@@ -44,6 +44,7 @@ local function boot(addons)
 	g.GetBuildInfo = function() return "1", "", "", 16001 end
 	g.UnitName = function() return "Tester" end
 	g.GetRealmName = function() return "Realm" end
+	g.time = os.time
 	g.geterrorhandler = function() return function(err) env.errors[#env.errors + 1] = err end end
 	g.SlashCmdList = {}
 	g.print = function(msg) env.printed[#env.printed + 1] = msg end
@@ -70,6 +71,7 @@ local function boot(addons)
 		end,
 	}
 	env.g = g
+	if setup then setup(g, env) end
 
 	local chunk = assert(loadfile("Sempre/Core.lua"))
 	setfenv(chunk, g)
@@ -282,6 +284,124 @@ do
 	fire(env, "ADDON_LOADED", "Sempre")
 	fire(env, "PLAYER_LOGIN")
 	check(env.loaded.Sempre_A, "missing GetAddOnEnableState counts as enabled")
+end
+
+-- Error collector
+
+-- Installs stub error-handler functions; the handler is whatever was set last.
+local function errSetup(extra)
+	return function(g, env)
+		env.prev = {}
+		env.current = function(err) env.prev[#env.prev + 1] = err end
+		g.geterrorhandler = function() return env.current end
+		g.seterrorhandler = function(fn) env.current = fn end
+		g.debugstack = function() return "Interface/AddOns/Other/A.lua:1: in a\nline2" end
+		g.date = function() return "01.01. 12:00" end
+		if extra then extra(g, env) end
+	end
+end
+
+local function lastPrinted(env, n)
+	local out = {}
+	for i = math.max(1, #env.printed - n + 1), #env.printed do out[#out + 1] = env.printed[i] end
+	return table.concat(out, "\n")
+end
+
+do
+	local env = boot(nil, errSetup())
+	env.current("Interface/AddOns/Other/A.lua:5: boom")
+	check(#env.prev == 1 and env.prev[1]:find("boom"), "error still reaches the previous handler")
+	fire(env, "ADDON_LOADED", "Sempre")
+	local errs = env.S.db.global.errors
+	check(#errs == 1 and errs[1].count == 1 and errs[1].ours == false, "early error moved into saved data, marked other")
+	check(errs[1].version == env.S.version and errs[1].time and errs[1].stack, "record holds version, time, stack")
+	env.current("Interface/AddOns/Other/A.lua:5: boom")
+	check(#errs == 1 and errs[1].count == 2, "identical error counts up")
+	env.current("Interface/AddOns/Other/A.lua:5: different")
+	check(#errs == 2, "different message adds a record")
+	check(#env.printed == 0, "foreign errors print no chat line")
+	check(#env.prev == 3, "every error is passed on")
+end
+
+do
+	local env = boot(nil, errSetup())
+	fire(env, "ADDON_LOADED", "Sempre")
+	for i = 1, 60 do env.current("Interface/AddOns/Other/A.lua:5: e" .. i) end
+	local errs = env.S.db.global.errors
+	check(#errs == 50 and errs[1].msg:find("e11$") and errs[50].msg:find("e60$"), "cap at 50 drops the oldest")
+end
+
+do
+	local env = boot(nil, errSetup())
+	fire(env, "ADDON_LOADED", "Sempre")
+	env.current("Interface/AddOns/Other/A.lua:5: foreign")
+	env.current("Interface/AddOns/Sempre_Items/X.lua:9: ours")
+	env.current("Interface/AddOns/Sempre_Items/X.lua:9: ours2")
+	check(#env.printed == 1 and env.printed[1]:find("/sempre errors"), "one chat line for the first own error")
+	env.current("Interface/AddOns/Sempre/Core.lua:9: ours3")
+	check(#env.printed == 1, "no further chat line in the session")
+	env.commands = env.S.commands
+	env.commands.fehler("")
+	local out = lastPrinted(env, 4)
+	local a, b, c = out:find("ours3"), out:find("ours2"), out:find("foreign")
+	check(a and b and c and a < b and b < c, "own errors list first, newest first")
+	check(out:find("%[other%]"), "foreign record is tagged")
+	check(out:find("A.lua:1: in a", 1, true), "first stack line is listed")
+	env.commands.errors("clear")
+	check(#env.S.db.global.errors == 0, "clear empties the list")
+	env.commands.fehler("")
+	check(lastPrinted(env, 1) == "|cffc8794aSempre|r No errors recorded.", "empty list message")
+end
+
+do
+	local env = boot(nil, errSetup())
+	fire(env, "ADDON_LOADED", "Sempre")
+	for i = 1, 12 do env.current("Interface/AddOns/Other/A.lua:5: e" .. i) end
+	local before = #env.printed
+	env.S.commands.fehler("")
+	check(#env.printed - before == 11, "default list shows 10 plus a hint")
+	before = #env.printed
+	env.S.commands.fehler("alle")
+	check(#env.printed - before == 12, "alle lists all")
+end
+
+do
+	local env = boot(nil, errSetup(function(g) g.issecretvalue = function() error("collector broke") end end))
+	env.current("msg")
+	check(#env.prev == 1 and env.prev[1] == "msg", "failure inside the collector still passes the error on")
+end
+
+do
+	local env = boot(nil, errSetup(function(g) g.issecretvalue = function(v) return v == "hidden" end end))
+	fire(env, "ADDON_LOADED", "Sempre")
+	env.current("hidden")
+	check(env.S.db.global.errors[1].msg == "<secret>", "secret message is replaced by a placeholder")
+end
+
+do
+	local env = boot(nil, errSetup(function(g)
+		g.C_EventUtils = { IsEventValid = function(e) return e == "ADDON_ACTION_BLOCKED" end }
+	end))
+	check(env.registered.ADDON_ACTION_BLOCKED and not env.registered.ADDON_ACTION_FORBIDDEN, "only known blocked-action events are registered")
+	check(#env.printed == 0, "no unknown-event warning")
+	fire(env, "ADDON_LOADED", "Sempre")
+	fire(env, "ADDON_ACTION_BLOCKED", "Sempre_Items", "Foo()")
+	local r = env.S.db.global.errors[1]
+	check(r and r.ours and r.msg:find("Sempre_Items") and r.msg:find("Foo%(%)"), "blocked action recorded")
+	check(#env.prev == 0, "blocked action does not call the error handler")
+end
+
+do
+	local env = boot()
+	check(env.registered.ADDON_ACTION_BLOCKED == nil, "no C_EventUtils: blocked events skipped")
+	local called = false
+	env = boot(nil, function(g, e)
+		g.geterrorhandler = function() return function() end end
+		g.seterrorhandler = nil
+		called = e ~= nil
+	end)
+	fire(env, "ADDON_LOADED", "Sempre")
+	check(called and #env.printed == 0 and #env.S.db.global.errors == 0, "missing seterrorhandler leaves the feature off silently")
 end
 
 dofile("tests/items.lua")(check, same)

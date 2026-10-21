@@ -25,6 +25,7 @@ you use.
 | --- | --- |
 | `/sempre` | Lists the commands |
 | `/sempre perf` | Memory per SempreUI module |
+| `/sempre errors` (`fehler`) | Recorded Lua errors and blocked addon actions, SempreUI first; `all` (`alle`) lists every record, `clear` (`leeren`) empties the list |
 | `/sempre version` | Addon version and client build |
 | `/sempre items` | Gold per character, age of bank and mail snapshots (`debug`: scan count) |
 
