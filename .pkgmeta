@@ -3,6 +3,7 @@ package-as: SempreUI
 # Every module needs its own line here.
 move-folders:
   SempreUI/Sempre: Sempre
+  SempreUI/Sempre_Items: Sempre_Items
 
 ignore:
   - README.md
