@@ -3,6 +3,7 @@
 ## Notes: Gold journal. Where each character's gold comes from and goes, per day and session.
 ## Notes-deDE: Goldjournal. Woher das Gold jedes Charakters kommt und wohin es geht, pro Tag und Sitzung.
 ## Author: SempreUI
+## IconTexture: Interface\AddOns\Sempre\Media\Icon
 ## Version: @project-version@
 ## Dependencies: Sempre
 ## LoadOnDemand: 1

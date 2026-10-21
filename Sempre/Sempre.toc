@@ -3,6 +3,7 @@
 ## Notes: Lightweight, modular UI for WoW: Forever. /sempre
 ## Notes-deDE: Leichte, modulare Oberfläche für WoW: Forever. /sempre
 ## Author: SempreUI
+## IconTexture: Interface\AddOns\Sempre\Media\Icon
 ## Version: @project-version@
 ## SavedVariables: SempreDB
 ## X-Sempre-Budget-KB: 300
