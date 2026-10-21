@@ -13,3 +13,4 @@
 ## X-License: GPL-3.0-only
 
 Items.lua
+Tooltip.lua
