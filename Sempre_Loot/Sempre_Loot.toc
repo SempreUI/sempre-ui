@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: |cffc8794aSempre|r Loot
+## Notes: Loot memory. Learns from your own looting what each mob and node drops, how often and what a kill is worth.
+## Notes-deDE: Beutegedächtnis. Lernt aus dem eigenen Looten, was jeder Gegner und jede Sammelstelle fallen lässt, wie oft und was ein Kill wert ist.
+## Author: SempreUI
+## IconTexture: Interface\AddOns\Sempre\Media\Icon
+## Version: @project-version@
+## Dependencies: Sempre
+## LoadOnDemand: 1
+## SavedVariables: SempreLootDB
+## X-Sempre-Module: 1
+## X-Sempre-Budget-KB: 150
+## X-Sempre-LoadWith: Login
+## X-License: GPL-3.0-only
+
+Loot.lua

@@ -5,6 +5,7 @@ move-folders:
   SempreUI/Sempre: Sempre
   SempreUI/Sempre_Items: Sempre_Items
   SempreUI/Sempre_Ledger: Sempre_Ledger
+  SempreUI/Sempre_Loot: Sempre_Loot
 
 ignore:
   - README.md

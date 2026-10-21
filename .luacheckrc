@@ -9,6 +9,7 @@ globals = {
 	"SempreDB",
 	"SempreItemsDB",
 	"SempreLedgerDB",
+	"SempreLootDB",
 	"SLASH_SEMPRE1",
 	"SlashCmdList",
 }
@@ -62,5 +63,15 @@ read_globals = {
 	"RAID_CLASS_COLORS",
 	"GameTooltip",
 	"ItemRefTooltip",
+	"GetNumLootItems",
+	"GetLootSlotType",
+	"GetLootSlotLink",
+	"GetLootSlotInfo",
+	"GetLootSourceInfo",
+	"UnitGUID",
+	"UnitIsDead",
+	"UnitClassification",
+	"IsShiftKeyDown",
+	"C_Map",
 }
 
