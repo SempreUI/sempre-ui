@@ -4,6 +4,7 @@ package-as: SempreUI
 move-folders:
   SempreUI/Sempre: Sempre
   SempreUI/Sempre_Items: Sempre_Items
+  SempreUI/Sempre_Ledger: Sempre_Ledger
 
 ignore:
   - README.md
