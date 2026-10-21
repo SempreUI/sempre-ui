@@ -335,15 +335,20 @@ local function isOurs(text)
 	return text ~= nil and text:find("Sempre[_/\\]") ~= nil
 end
 
--- Assumption: debugstack(start, lines, lines) returns a string; level 3
--- skips this collector's own frames. Missing function: no stack.
+-- Assumption: debugstack(start, lines, lines) returns a string. How many
+-- frames the collector itself adds is not known for sure, so a generous stack
+-- is taken and its leading lines that point into the core (the collector) or
+-- into C code are skipped; an error inside the core still names its file in
+-- the message. Missing function: no stack.
 local function stackText()
 	if not debugstack then return end
-	local ok, text = pcall(debugstack, 3, STACK_LINES, 0)
+	local ok, text = pcall(debugstack, 1, STACK_LINES + 12, 0)
 	if not ok or type(text) ~= "string" or (issecretvalue and issecretvalue(text)) then return end
-	local lines = {}
+	local lines, leading = {}, true
 	for line in text:gmatch("[^\r\n]+") do
-		if #lines < STACK_LINES then lines[#lines + 1] = line end
+		-- Leading core and C lines belong to the collector itself.
+		if leading and not (line:find("Sempre[/\\]Core%.lua") or line:find("^%[C%]")) then leading = false end
+		if not leading and #lines < STACK_LINES then lines[#lines + 1] = line end
 	end
 	return #lines > 0 and table.concat(lines, "\n") or nil
 end
