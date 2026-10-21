@@ -498,6 +498,16 @@ do
 	env.S.commands.gold("ALLE")
 	out = env.out()
 	check(out:find("Tester%-Realm: |cffc8794a%+11g 85s 6c|r") and out:find("Total: |cffc8794a%+11g 85s 6c|r"), "alle: net per character and total")
+
+	env.printed = {}
+	env.show("Merchant")
+	env.pay(-10)
+	env.hide("Merchant")
+	env.S.commands.gold("")
+	out = env.out()
+	check(out:find("vendor: %+12g 34s 56c, %-0g 0s 10c"), "income and expense of one source share a line: " .. out)
+	local _, vendorLines = out:gsub("vendor:", "")
+	check(vendorLines == 2, "one vendor line per period")
 end
 
 do

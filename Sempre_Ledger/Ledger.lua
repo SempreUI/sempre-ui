@@ -24,7 +24,7 @@ local ADDON_NAME = ...
 
 local S = SempreUI
 local pairs, ipairs, type, format, tonumber, floor, abs, select = pairs, ipairs, type, string.format, tonumber, math.floor, math.abs, select
-local time, date, sort, max = time, date, table.sort, math.max
+local time, date, sort, concat, max = time, date, table.sort, table.concat, math.max
 local issecretvalue = issecretvalue
 local C_Container, C_Item, C_EventUtils, C_Merchant, C_Mail = C_Container, C_Item, C_EventUtils, C_Merchant, C_Mail
 local GetMoney, GetTime, GetRealmName, GetLocale = GetMoney, GetTime, GetRealmName, GetLocale
@@ -615,14 +615,24 @@ local function signedText(copper)
 	return (copper < 0 and "-" or "+") .. moneyText(copper)
 end
 
+-- One line per source, income and expense side by side, largest first.
 local function sourceLines(res)
-	local list = {}
-	for source, v in pairs(res.income) do list[#list + 1] = { source, v, "+" } end
-	for source, v in pairs(res.expense) do list[#list + 1] = { source, v, "-" } end
+	local bySource, list = {}, {}
+	local function add(source, v, slot)
+		local line = bySource[source]
+		if not line then
+			line = { source = source }
+			bySource[source] = line
+			list[#list + 1] = line
+		end
+		line[slot] = v
+	end
+	for source, v in pairs(res.income) do add(source, v, "plus") end
+	for source, v in pairs(res.expense) do add(source, v, "minus") end
+	for _, line in ipairs(list) do line.size = max(line.plus or 0, line.minus or 0) end
 	sort(list, function(a, b)
-		if a[2] ~= b[2] then return a[2] > b[2] end
-		if a[1] ~= b[1] then return a[1] < b[1] end
-		return a[3] < b[3]
+		if a.size ~= b.size then return a.size > b.size end
+		return a.source < b.source
 	end)
 	return list
 end
@@ -636,7 +646,10 @@ local function printPeriod(label, res)
 		return
 	end
 	for _, line in ipairs(list) do
-		print(format("    %s: %s%s", L[line[1]], line[3], moneyText(line[2])))
+		local parts = {}
+		if line.plus then parts[#parts + 1] = "+" .. moneyText(line.plus) end
+		if line.minus then parts[#parts + 1] = "-" .. moneyText(line.minus) end
+		print(format("    %s: %s", L[line.source], concat(parts, ", ")))
 	end
 end
 
