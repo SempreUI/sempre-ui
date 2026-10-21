@@ -284,5 +284,7 @@ do
 	check(env.loaded.Sempre_A, "missing GetAddOnEnableState counts as enabled")
 end
 
+dofile("tests/items.lua")(check, same)
+
 print(string.format("%d checks, %d failed", count, failures))
 os.exit(failures == 0 and 0 or 1)
