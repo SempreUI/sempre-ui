@@ -28,6 +28,7 @@ you use.
 | `/sempre errors` (`fehler`) | Recorded Lua errors and blocked addon actions, SempreUI first; `all` (`alle`) lists every record, `clear` (`leeren`) empties the list |
 | `/sempre version` | Addon version and client build |
 | `/sempre items` | Gold per character, age of bank and mail snapshots (`debug`: scan count) |
+| `/sempre gold` (`ledger`) | Gold journal of this character: session, today and last 7 days by source; `all` (`alle`) shows the last 7 days per character, `items` the top 10 vendor sales of the last 30 days |
 
 ## License
 
