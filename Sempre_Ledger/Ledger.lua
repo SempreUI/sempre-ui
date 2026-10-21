@@ -124,7 +124,9 @@ local db, rec, charKey, session
 local started = false
 local lastMoney -- nil until the first reading, which only sets the baseline
 local open = {} -- merchant, mail, auction, trainer, flight, trade, guildbank, loot
-local lastQuest, lastLootClose, lastFlight, lastRepair, lastSendOwn
+local lastQuest, lastFlight, lastRepair, lastSendOwn
+-- Close times of windows whose money may arrive just after they close.
+local closedAt = {}
 local incoming = {} -- money in mails from own characters that is being taken: { amount, time }
 local visitSales = {} -- sales of the current merchant visit, newest last
 local pendingSales = {} -- itemID -> sales waiting for the item's sell price
@@ -220,9 +222,10 @@ local function sourceFor(diff, now)
 	if open.auction then return "auction" end
 	if open.trainer then return "trainer" end
 	if open.flight or (lastFlight and now - lastFlight <= FLIGHT_WINDOW) then return "flight" end
-	if lastQuest and now - lastQuest <= QUEST_WINDOW then return "quest" end
-	if open.loot or (lastLootClose and now - lastLootClose <= LOOT_WINDOW) then return "loot" end
-	if open.trade then return "trade" end
+	if open.quest or (lastQuest and now - lastQuest <= QUEST_WINDOW)
+		or (closedAt.quest and now - closedAt.quest <= QUEST_WINDOW) then return "quest" end
+	if open.loot or (closedAt.loot and now - closedAt.loot <= LOOT_WINDOW) then return "loot" end
+	if open.trade or (closedAt.trade and now - closedAt.trade <= LOOT_WINDOW) then return "trade" end
 	if open.guildbank then return "guildbank" end
 	return "other"
 end
@@ -298,7 +301,7 @@ local function setOpen(flag, value)
 	if open[flag] == value then return end
 	open[flag] = value
 	if flag == "merchant" and value then visitSales = {} end
-	if flag == "loot" and not value then lastLootClose = GetTime() end
+	if not value then closedAt[flag] = GetTime() end
 end
 
 local function onInteraction(event, kind)
@@ -315,6 +318,8 @@ local CLASSIC = {
 	{ "trade", "TRADE_SHOW", "TRADE_CLOSED" },
 	{ "guildbank", "GUILDBANKFRAME_OPENED", "GUILDBANKFRAME_CLOSED" },
 	{ "loot", "LOOT_OPENED", "LOOT_CLOSED" },
+	-- The reward window: the money may come before or after it closes.
+	{ "quest", "QUEST_COMPLETE", "QUEST_FINISHED" },
 }
 
 -- Events that this client may not know are checked first, so the core does not
