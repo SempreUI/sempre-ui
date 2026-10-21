@@ -51,9 +51,10 @@ hour. No preloaded databases: everything comes from the player's own play.
    after) for the value.
 7. **Rates and reliability.** Drop rate per item = times dropped / looted
    kills. Show a rate as reliable from 20 kills (or 20 gathers) on; below,
-   show the count only ("3 of 7 kills") in grey. Rates below 1 % with fewer
-   than 100 kills are shown under "rare" and left out of the value per kill
-   (outlier rule), so one lucky drop does not dominate the ranking.
+   show the count only ("3 of 7 kills") in grey. An item seen only once in 20
+   to 99 kills, or with a rate below 1 %, is shown under "rare" and left out
+   of the value per kill (outlier rule), so one lucky drop does not dominate
+   the ranking.
 8. **Value.** Value of an item = vendor sell price from item info (11th value)
    for now. If `SempreUI.Market` exists later, use its price instead (feature
    check, no hard dependency). Value per kill = money per kill + sum of item
