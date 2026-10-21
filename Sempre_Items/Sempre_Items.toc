@@ -3,6 +3,7 @@
 ## Notes: Remembers items, gold and mail of all characters. Item counts in tooltips.
 ## Notes-deDE: Merkt sich Gegenstände, Gold und Post aller Charaktere. Anzahl im Tooltip.
 ## Author: SempreUI
+## IconTexture: Interface\AddOns\Sempre\Media\Icon
 ## Version: @project-version@
 ## Dependencies: Sempre
 ## LoadOnDemand: 1
