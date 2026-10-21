@@ -26,6 +26,7 @@ you use.
 | `/sempre` | Lists the commands |
 | `/sempre perf` | Memory per SempreUI module |
 | `/sempre version` | Addon version and client build |
+| `/sempre items` | Gold per character, age of bank and mail snapshots (`debug`: scan count) |
 
 ## License
 
