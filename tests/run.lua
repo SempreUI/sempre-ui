@@ -406,6 +406,7 @@ end
 
 dofile("tests/items.lua")(check, same)
 dofile("tests/ledger.lua")(check)
+dofile("tests/loot.lua")(check)
 
 print(string.format("%d checks, %d failed", count, failures))
 os.exit(failures == 0 and 0 or 1)
