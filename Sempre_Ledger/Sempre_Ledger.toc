@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: |cffc8794aSempre|r Ledger
+## Notes: Gold journal. Where each character's gold comes from and goes, per day and session.
+## Notes-deDE: Goldjournal. Woher das Gold jedes Charakters kommt und wohin es geht, pro Tag und Sitzung.
+## Author: SempreUI
+## Version: @project-version@
+## Dependencies: Sempre
+## LoadOnDemand: 1
+## SavedVariables: SempreLedgerDB
+## X-Sempre-Module: 1
+## X-Sempre-Budget-KB: 100
+## X-Sempre-LoadWith: Login
+## X-License: GPL-3.0-only
+
+Ledger.lua
