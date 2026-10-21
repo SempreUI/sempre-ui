@@ -10,7 +10,7 @@ local ADDON_NAME = ...
 local S = SempreUI
 local Items = S.Items
 local L = Items.L
-local format, concat, type = string.format, table.concat, type
+local format, concat, type, ipairs = string.format, table.concat, type, ipairs
 local wipe = table.wipe
 local issecretvalue = issecretvalue
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
@@ -81,12 +81,14 @@ end
 
 -- Hooked from the module's own ADDON_LOADED. Without the tooltip processor the
 -- tooltip feature is off and the rest of the module keeps working.
-S:On("ADDON_LOADED", function(_, name)
+local function onLoaded(_, name)
 	if name ~= ADDON_NAME then return end
+	S:Off("ADDON_LOADED", onLoaded)
 	local types = Enum and Enum.TooltipDataType
 	if not (TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and types and types.Item) then
 		S:Print(L.NO_TOOLTIP)
 		return
 	end
 	TooltipDataProcessor.AddTooltipPostCall(types.Item, onItem)
-end)
+end
+S:On("ADDON_LOADED", onLoaded)

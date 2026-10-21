@@ -516,8 +516,9 @@ local function start()
 	schedule()
 end
 
-S:On("ADDON_LOADED", function(_, name)
+local function onLoaded(_, name)
 	if name ~= ADDON_NAME then return end
+	S:Off("ADDON_LOADED", onLoaded)
 	initDB()
 	-- Normally the core already knows the character; if the module was loaded
 	-- earlier, the login event completes the start.
@@ -526,7 +527,8 @@ S:On("ADDON_LOADED", function(_, name)
 	else
 		S:On("PLAYER_LOGIN", start)
 	end
-end)
+end
+S:On("ADDON_LOADED", onLoaded)
 
 -- Interface
 
@@ -655,7 +657,7 @@ S.commands.items = function(arg)
 		if total > shown then print("    " .. format(L.MAIL_HIDDEN, total - shown)) end
 	end
 	print(format("  %s: %s", L.TOTAL, moneyText(sum)))
-	if db.account then
+	if db.account and next(db.account.items) then
 		print(format("  %s: %s", L.account, ageText(ageOf(db.account))))
 	end
 	if not bankTracked then print("  " .. L.NO_BANK) end
