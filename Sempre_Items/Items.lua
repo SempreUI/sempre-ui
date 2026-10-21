@@ -166,15 +166,15 @@ local changed = {}
 local MAX_LINKS = 4
 
 -- Links: stored only when they carry more than the item ID. Assumption: after
--- "item:<id>" come enchant, three gems and the suffix; the later fields (level,
+-- "item:<id>" come enchant, four gems and the suffix; the later fields (level,
 -- spec, bonus IDs) are set on nearly every link and are not counted.
 
 local function plain(v) return v == "" or v == "0" end
 
 local function shortLink(link)
 	if type(link) ~= "string" then return end
-	local a, b, c, d, e = link:match("item:%d+:([^:|]*):([^:|]*):([^:|]*):([^:|]*):([^:|]*)")
-	if not a or (plain(a) and plain(b) and plain(c) and plain(d) and plain(e)) then return end
+	local a, b, c, d, e, f = link:match("item:%d+:([^:|]*):([^:|]*):([^:|]*):([^:|]*):([^:|]*):([^:|]*)")
+	if not a or (plain(a) and plain(b) and plain(c) and plain(d) and plain(e) and plain(f)) then return end
 	return link:match("(item:[^|]+)")
 end
 
@@ -301,7 +301,7 @@ local function scanMail()
 	local mails = {}
 	local maxAttach = ATTACHMENTS_MAX_RECEIVE or 16
 	for i = 1, shown do
-		local _, _, _, _, money, _, days, itemCount, _, _, _, _, canReply = GetInboxHeaderInfo(i)
+		local _, _, _, _, money, _, days, itemCount, _, _, _, canReply = GetInboxHeaderInfo(i)
 		local mail = { kind = mailKind(i, canReply), money = money or 0, days = days or 0, items = {} }
 		local list = mail.items
 		if GetInboxItem and (itemCount or 0) > 0 then
