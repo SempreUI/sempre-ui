@@ -1,8 +1,8 @@
 # Briefing: Sempre_Items (item data engine)
 
-Status: draft, 2026-10-20. To be checked against the probe results from the
-Forever stress test on 2026-10-21 before building. Open points are marked
-**[probe]**.
+Status: ready to build, 2026-10-21. The beta probe has not run yet; points it
+will settle are marked **[probe]** and must be built so that every listed
+variant works, detected at runtime. They get adjusted after the probe if needed.
 
 ## Purpose
 
@@ -32,7 +32,8 @@ visible feature: item counts per character in the item tooltip.
    - Equipped: all inventory slots, rescanned on equipment change.
    - Gold: on login and on every money change.
    - An account-wide bank, if Forever has one **[probe]**. Feature-detect it;
-     if missing, skip silently.
+     if missing, skip silently. It belongs to no character: store it once,
+     account-wide, and show it in the tooltip as its own line ("Account bank").
 3. **Characters:** key is `Name-Realm`, read once at login from the core
    (`SempreUI.charKey`). Also store class, faction, level and the time of the
    last update, for the alt overview.
@@ -75,26 +76,43 @@ Read-only functions on `SempreUI.Items`:
   money and snapshot ages.
 - `GetMail(charKey)`: list of saved mails with days left.
 
-Change notification: the core gets a tiny message bus, `SempreUI:Send(msg, ...)`
-and `SempreUI:Listen(msg, fn)`, separate from game events. Sempre_Items sends
-`ITEMS_CHANGED` with the character key and location after each scan.
+Change notification: through the core message bus (`SempreUI:Send`, already
+in the core). Sempre_Items sends `ITEMS_CHANGED` with the character key and
+location after each scan.
 
 ## Loading
 
-Item data must be current all the time, so Sempre_Items is not loaded on
-demand like other modules: the core loads every enabled module that has
-`## X-Sempre-LoadWith: Login` right after `PLAYER_LOGIN`. Add that to the core
-as part of this work. Budget 150 KB with a dozen characters.
+Item data must be current all the time, so the TOC has
+`## X-Sempre-LoadWith: Login` (already supported by the core). The core loads
+the module from inside `PLAYER_LOGIN`, so the module never sees that event; it
+does its login work in its own `ADDON_LOADED` (see CLAUDE.md). Budget 150 KB
+with a dozen characters. Folder `Sempre_Items`, TOC `Sempre_Items.toc`, plus
+the `.pkgmeta` line.
 
 ## Forever and API notes
 
 - Use `C_Container.*` and `C_Item.*`; no removed globals.
-- Bank layout: the 12.x client uses bank tabs, classic used bank bag slots.
-  Which one Forever uses decides how the bank is read **[probe]**. Discover the
-  bag indices at runtime from `Enum.BagIndex` and feature-detect `C_Bank`;
-  do not hard-code IDs.
-- Mail: `GetInboxNumItems` returns shown and total count; the server shows
-  at most 50 at a time **[probe]**. Days left come from the header info.
+- Bank layout **[probe]**: the 12.x client uses character bank tabs and
+  account bank tabs; older clients used a main bank container, bank bag slots
+  and a reagent bank. Support both: build the list of bank containers at
+  runtime from the names in `Enum.BagIndex` (character bank: names starting
+  with `Bank`, `BankBag`, `CharacterBankTab` or `Reagentbank`; account bank:
+  names starting with `AccountBankTab`), keep only those whose slot count is
+  above 0, and never hard-code numbers. If `Enum.BagIndex` is missing, the bank
+  is not tracked and `/sempre items` says so.
+- Optional events: the core's `SempreUI:On` prints a warning for events the
+  client does not know. For events that may not exist (bank tab and account
+  bank events), first check with `C_EventUtils.IsEventValid` when that
+  function exists, and skip quietly if the event is invalid.
+- Mail **[probe]**: `GetInboxNumItems` returns shown and total count; the
+  server may show only part of the mails at once. Save what is shown, also
+  store the total, and let `/sempre items` say "N mails not yet visible" when
+  total is larger. Days left come from the header info. The inbox functions
+  are plain globals with no `C_` replacement; that is allowed here.
+- Tooltip: use `TooltipDataProcessor.AddTooltipPostCall` for item tooltips
+  when it exists; if not, the tooltip feature is off and the rest still works.
+  Never touch secret values; item tooltips carry none, but guard the item ID
+  with `issecretvalue` where the function exists.
 - Item info can arrive late for items not yet cached; request it and fill in
   the name on `ITEM_DATA_LOAD_RESULT` instead of storing nil.
 
@@ -105,7 +123,10 @@ These are separate modules that use this engine.
 
 ## Acceptance checks
 
-- `luacheck .` clean.
+- `luacheck .` clean, `lua5.1 tests/run.lua` passes, and new offline tests with
+  stubbed WoW API cover: scan coalescing, both bank layouts, missing account
+  bank, mail with total above shown, tooltip line order and the 8-character
+  cap, combat queueing.
 - Fresh character: log in, `/sempre items` shows the character with gold.
 - Pick up an item: tooltip count changes without reload.
 - Open the bank, close it, log out and in: bank counts still in the tooltip.
