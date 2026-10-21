@@ -13,7 +13,8 @@ local pairs, ipairs, type, format, tostring, tonumber, select = pairs, ipairs, t
 local collectgarbage, setmetatable = collectgarbage, setmetatable
 local UnitName, GetRealmName = UnitName, GetRealmName
 local sort, wipe = table.sort, table.wipe
-local geterrorhandler = geterrorhandler
+local geterrorhandler, seterrorhandler, debugstack = geterrorhandler, seterrorhandler, debugstack
+local issecretvalue, time, date, C_EventUtils = issecretvalue, time, date, C_EventUtils
 
 local S = {}
 SempreUI = S
@@ -28,7 +29,7 @@ local L = setmetatable({}, { __index = function(_, k) return k end })
 S.L = L
 if GetLocale() == "deDE" then
 	L.LOADED = "geladen. /sempre für Befehle."
-	L.HELP = "Befehle: |cffc8794a/sempre perf|r Speicher pro Modul, |cffc8794a/sempre version|r Version."
+	L.HELP = "Befehle: |cffc8794a/sempre perf|r Speicher pro Modul, |cffc8794a/sempre fehler|r Fehlerliste, |cffc8794a/sempre version|r Version."
 	L.PERF_HEADER = "Speicher pro Modul (KB, Budget in Klammern):"
 	L.PERF_TOTAL = "Gesamt"
 	L.OVER_BUDGET = "über Budget"
@@ -36,9 +37,16 @@ if GetLocale() == "deDE" then
 	L.MODULE_FAILED = "Modul %s konnte nicht geladen werden: %s"
 	L.UNKNOWN_EVENT = "Ereignis %s gibt es in diesem Client nicht."
 	L.LOAD_COST = "beim Laden"
+	L.ERR_NOTICE = "Ein SempreUI-Fehler wurde erfasst. /sempre fehler zeigt ihn."
+	L.ERR_NONE = "Keine Fehler erfasst."
+	L.ERR_CLEARED = "Fehlerliste geleert."
+	L.ERR_OTHER = "fremd"
+	L.ERR_MORE = "%d weitere, /sempre fehler alle zeigt alle."
+	L.ERR_BLOCKED = "Aktion blockiert: %s, %s"
+	L.SECRET = "<geheim>"
 else
 	L.LOADED = "loaded. /sempre for commands."
-	L.HELP = "Commands: |cffc8794a/sempre perf|r memory per module, |cffc8794a/sempre version|r version."
+	L.HELP = "Commands: |cffc8794a/sempre perf|r memory per module, |cffc8794a/sempre errors|r error list, |cffc8794a/sempre version|r version."
 	L.PERF_HEADER = "Memory per module (KB, budget in brackets):"
 	L.PERF_TOTAL = "Total"
 	L.OVER_BUDGET = "over budget"
@@ -46,6 +54,13 @@ else
 	L.MODULE_FAILED = "Module %s could not be loaded: %s"
 	L.UNKNOWN_EVENT = "Event %s does not exist in this client."
 	L.LOAD_COST = "on load"
+	L.ERR_NOTICE = "A SempreUI error was recorded. /sempre errors shows it."
+	L.ERR_NONE = "No errors recorded."
+	L.ERR_CLEARED = "Error list cleared."
+	L.ERR_OTHER = "other"
+	L.ERR_MORE = "%d more, /sempre errors all shows all."
+	L.ERR_BLOCKED = "Action blocked: %s, %s"
+	L.SECRET = "<secret>"
 end
 
 -- Formats only when arguments follow, so a plain "50%" message is safe.
@@ -174,7 +189,7 @@ end
 local DB_VERSION = 1
 local defaults = {
 	version = DB_VERSION,
-	global = {},
+	global = { errors = {} },
 	chars = {},
 	profiles = {},
 }
@@ -296,8 +311,154 @@ local function printPerf()
 	print(format("  %s: %.0f", L.PERF_TOTAL, total))
 end
 
+-- Error collector. Wraps the game's error handler: records first, then passes
+-- the error on unchanged. Records live in memory until the saved data is
+-- loaded, then in SempreDB.global.errors (oldest dropped past ERR_MAX).
+
+local ERR_MAX, ERR_SHOWN, STACK_LINES = 50, 10, 4
+local errStore = {}
+local errNotified, errBusy = false, false
+
+-- Never compares or joins a secret value; a placeholder is stored instead.
+local function plain(v)
+	if issecretvalue and issecretvalue(v) then return L.SECRET end
+	if type(v) == "string" then return v end
+	return tostring(v)
+end
+
+local function firstLine(text)
+	return text and text:match("[^\r\n]+") or ""
+end
+
+-- Ours when the text names the Sempre folder or a Sempre_<Name> folder.
+local function isOurs(text)
+	return text ~= nil and text:find("Sempre[_/\\]") ~= nil
+end
+
+-- Assumption: debugstack(start, lines, lines) returns a string; level 3
+-- skips this collector's own frames. Missing function: no stack.
+local function stackText()
+	if not debugstack then return end
+	local ok, text = pcall(debugstack, 3, STACK_LINES, 0)
+	if not ok or type(text) ~= "string" or (issecretvalue and issecretvalue(text)) then return end
+	local lines = {}
+	for line in text:gmatch("[^\r\n]+") do
+		if #lines < STACK_LINES then lines[#lines + 1] = line end
+	end
+	return #lines > 0 and table.concat(lines, "\n") or nil
+end
+
+local function addRecord(msg, stack, ours)
+	local key = firstLine(stack)
+	for i = 1, #errStore do
+		local r = errStore[i]
+		if r.msg == msg and firstLine(r.stack) == key then
+			r.count = r.count + 1
+			r.time = time()
+			return ours
+		end
+	end
+	errStore[#errStore + 1] = { msg = msg, stack = stack, time = time(), version = S.version, count = 1, ours = ours }
+	while #errStore > ERR_MAX do table.remove(errStore, 1) end
+	return ours
+end
+
+-- Guarded as a whole by the callers' pcall; prints one chat line per session.
+local function record(msg, stack, ours)
+	if errBusy then return end
+	errBusy = true
+	local ok, mine = pcall(function()
+		if stack == nil then stack = stackText() end
+		msg = plain(msg)
+		if ours == nil then ours = isOurs(msg) or isOurs(stack) end
+		return addRecord(msg, stack, ours)
+	end)
+	errBusy = false
+	if ok and mine and not errNotified then
+		errNotified = true
+		pcall(S.Print, S, L.ERR_NOTICE)
+	end
+end
+
+local function installErrorHandler()
+	if type(geterrorhandler) ~= "function" or type(seterrorhandler) ~= "function" then return end
+	local okGet, previous = pcall(geterrorhandler)
+	if not okGet or type(previous) ~= "function" then return end
+	pcall(seterrorhandler, function(msg)
+		pcall(record, msg)
+		return previous(msg)
+	end)
+end
+installErrorHandler()
+
+-- Blocked or forbidden addon actions. Events the client does not know are
+-- skipped before registering, so the unknown-event warning stays quiet.
+local function onActionBlocked(_, addon, func)
+	pcall(function()
+		local name, fn = plain(addon), plain(func)
+		record(format(L.ERR_BLOCKED, name, fn), nil, name == ADDON_NAME or name:sub(1, 7) == "Sempre_")
+	end)
+end
+
+local function eventKnown(event)
+	if not (C_EventUtils and C_EventUtils.IsEventValid) then return false end
+	local ok, valid = pcall(C_EventUtils.IsEventValid, event)
+	return ok and valid == true
+end
+
+for _, event in ipairs({ "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN" }) do
+	if eventKnown(event) then S:On(event, onActionBlocked) end
+end
+
+-- Called once the saved data exists: early records move into it.
+local function attachErrorStore(db)
+	if type(db.global.errors) ~= "table" then db.global.errors = {} end
+	local saved = db.global.errors
+	for i = 1, #errStore do saved[#saved + 1] = errStore[i] end
+	while #saved > ERR_MAX do table.remove(saved, 1) end
+	errStore = saved
+end
+
+local function stamp(t)
+	local ok, text = pcall(date, "%d.%m. %H:%M", t)
+	return ok and text or tostring(t)
+end
+
+local function printErrors(arg)
+	arg = (arg or ""):lower()
+	if arg == "leeren" or arg == "clear" then
+		wipe(errStore)
+		S:Print(L.ERR_CLEARED)
+		return
+	end
+	-- Newest first, ours before the others.
+	local ours, others = {}, {}
+	for i = #errStore, 1, -1 do
+		local r = errStore[i]
+		local list = r.ours and ours or others
+		list[#list + 1] = r
+	end
+	for _, r in ipairs(others) do ours[#ours + 1] = r end
+	if #ours == 0 then
+		S:Print(L.ERR_NONE)
+		return
+	end
+	local limit = (arg == "alle" or arg == "all") and #ours or ERR_SHOWN
+	for i = 1, math.min(limit, #ours) do
+		local r = ours[i]
+		local text = tostring(r.msg):gsub("%s*[\r\n]+%s*", " "):sub(1, 200)
+		local line = format("%s x%d %s%s", stamp(r.time), r.count or 1, r.ours and "" or "[" .. L.ERR_OTHER .. "] ", text)
+		local top = firstLine(r.stack)
+		if top ~= "" then line = line .. " | " .. top end
+		print(line)
+	end
+	if #ours > limit then S:Print(L.ERR_MORE, #ours - limit) end
+end
+
 local commands = {
 	perf = printPerf,
+	fehler = printErrors,
+	errors = printErrors,
 	version = function()
 		local build, _, _, interface = GetBuildInfo()
 		S:Print("%s, client %s (%s)", S.version, tostring(build), tostring(interface))
@@ -321,6 +482,7 @@ S:On("ADDON_LOADED", function(_, name)
 	SempreDB = SempreDB or {}
 	applyDefaults(SempreDB, defaults)
 	S.db = SempreDB
+	attachErrorStore(SempreDB)
 end)
 
 S:On("PLAYER_LOGIN", function()
