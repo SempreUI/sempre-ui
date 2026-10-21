@@ -1,6 +1,6 @@
 # Tests
 
-Plain Lua 5.1 tests for the core (`run.lua`) and the item module (`items.lua`, run by `run.lua`) with a stubbed WoW API. They are not part of
+Plain Lua 5.1 tests for the core (including the error collector) (`run.lua`) and the item module (`items.lua`, run by `run.lua`) with a stubbed WoW API. They are not part of
 the addon package (`tests` is in the `.pkgmeta` ignore list).
 
 Run from the repo root:
