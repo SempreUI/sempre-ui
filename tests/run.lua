@@ -410,6 +410,7 @@ dofile("tests/ledger2.lua")(check, bootLedger)
 local bootLoot = dofile("tests/loot.lua")(check)
 dofile("tests/mail.lua")(check, same)
 dofile("tests/way.lua")(check)
+dofile("tests/buttons.lua")(check)
 dofile("tests/settings.lua")(check, same, { items = bootItems, loot = bootLoot })
 
 print(string.format("%d checks, %d failed", count, failures))
