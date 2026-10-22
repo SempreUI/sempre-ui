@@ -323,7 +323,7 @@ end
 do
 	local env = boot()
 	local S = env.S
-	check(env.sub("General") and #env.pageBoxes("General") == 3, "core page holds the login and font options")
+	check(env.sub("General") and #env.pageBoxes("General") == 4, "core page holds the login, font and news options")
 	local box = env.pageBoxes("General")[1]
 	check(box.setting.name == "Login message in chat" and box.setting.default == true and box.tip:find("version", 1, true), "label, default and tooltip of the option")
 	box.setting.set(false)
