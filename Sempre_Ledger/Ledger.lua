@@ -34,6 +34,8 @@
 -- Messages: LEDGER_CHANGED(charKey, source) after each booking and
 -- LEDGER_ITEM_CHANGED(charKey, itemID) after each item booking (a vendor sale,
 -- an auction sale, a purchase, a cancelled bid).
+--
+-- /sempre gold: default, alle, items [ah], pruefen (alias check).
 
 local ADDON_NAME = ...
 
@@ -81,6 +83,9 @@ if GetLocale() == "deDE" then
 	L.NO_ITEMS = "Keine Item-Buchungen erfasst."
 	L.AH_ITEMS_HEADER = "Top 10 Auktionshaus-Verkäufe der letzten 30 Tage nach Ergebnis:"
 	L.NO_AH_ITEMS = "Keine Auktionshaus-Verkäufe erfasst."
+	L.CHECK_HEADER = "Händlerprüfung: Abweichungen zwischen Itemverkäufen und Händlereinnahmen (die letzten %d):"
+	L.CHECK_NONE = "Händlerprüfung: keine Abweichungen erfasst."
+	L.NO_SALES = "keine Itemverkäufe"
 	L.PART_VENDOR = "Händler"
 	L.PART_AUCTION = "Auktion"
 	L.PART_BOUGHT = "Einkauf"
@@ -113,6 +118,9 @@ else
 	L.NO_ITEMS = "No item bookings recorded."
 	L.AH_ITEMS_HEADER = "Top 10 auction house sales of the last 30 days by net result:"
 	L.NO_AH_ITEMS = "No auction house sales recorded."
+	L.CHECK_HEADER = "Vendor check: differences between item sales and vendor income (last %d):"
+	L.CHECK_NONE = "Vendor check: no differences recorded."
+	L.NO_SALES = "no item sales"
 	L.PART_VENDOR = "vendor"
 	L.PART_AUCTION = "auction"
 	L.PART_BOUGHT = "bought"
@@ -165,6 +173,7 @@ local lastQuest, lastFlight, lastRepair, lastSendOwn
 local closedAt = {}
 local incoming = {} -- money in mails from own characters that is being taken: { amount, time }
 local visitSales = {} -- sales of the current merchant visit, newest last
+local visit -- the open merchant visit: { income = vendor income booked since it opened }
 local pendingSales = {} -- itemID -> sales waiting for the item's sell price
 local pendingSpend = {} -- purchases and deposits waiting for their money change
 local mailInfo = {} -- inbox index -> auction mail read when the mailbox showed it
@@ -254,6 +263,7 @@ local function book(source, diff, sub)
 	local into = diff > 0 and day.income or day.expense
 	local amount = abs(diff)
 	into[source] = (into[source] or 0) + amount
+	if visit and source == "vendor" and diff > 0 then visit.income = visit.income + amount end
 	if sub then
 		local t = daySub(dayKey(0), "sub")
 		t[sub] = (t[sub] or 0) + amount
@@ -310,6 +320,7 @@ end
 
 local takeSpend, settleSpend -- see "Purchases"
 local scanInbox, takeAuctionMail -- see "Auction mail"
+local checkVisit -- see "Vendor check"
 
 local function onMoney()
 	if not started then return end
@@ -367,7 +378,11 @@ end
 local function setOpen(flag, value)
 	if open[flag] == value then return end
 	open[flag] = value
-	if flag == "merchant" and value then visitSales = {} end
+	if flag == "merchant" and value then
+		visitSales = {}
+		visit = { income = 0 }
+	end
+	if flag == "merchant" and not value and checkVisit then checkVisit() end
 	-- The invoices are read now: a mail may be gone once its money is taken.
 	if flag == "mail" and value and scanInbox then scanInbox() end
 	if not value then closedAt[flag] = GetTime() end
@@ -419,11 +434,12 @@ end
 local function recordSale(itemID, count)
 	local key = dayKey(0)
 	local price = sellPrice(itemID)
-	local sale = { id = itemID, count = count, copper = 0, day = key }
+	local sale = { id = itemID, count = count, copper = 0, day = key, origCount = count, orig = 0 }
 	local entry = vendorEntry(key, itemID)
 	entry.count = entry.count + count
 	if price then
 		sale.copper = price * count
+		sale.orig = sale.copper
 		entry.copper = entry.copper + sale.copper
 	else
 		-- Not cached yet: the price is filled in when the client has it.
@@ -457,6 +473,7 @@ local function onItemData(_, itemID, success)
 			sale.pending = nil
 			if sale.count > 0 then
 				sale.copper = price * sale.count
+				sale.orig = price * sale.origCount
 				local entry = vendorEntry(sale.day, itemID)
 				entry.copper = entry.copper + sale.copper
 			end
@@ -746,6 +763,37 @@ function takeAuctionMail(rest, now)
 		end
 	end
 	return rest
+end
+
+-- Vendor check. At the end of a merchant visit the item sales (at vendor price,
+-- before any buyback) are compared with the vendor income booked meanwhile. A
+-- difference is kept silently, the last 20 per character, for /sempre gold
+-- pruefen. A visit with a sale that still waits for its price is not checked.
+
+local MAX_CHECKS, MAX_CHECK_ITEMS = 20, 10
+
+function checkVisit()
+	local v = visit
+	visit = nil
+	if not (v and rec) then return end
+	local sum, byItem, items = 0, {}, {}
+	for _, sale in ipairs(visitSales) do
+		if sale.pending then return end
+		sum = sum + sale.orig
+		local line = byItem[sale.id]
+		if not line then
+			line = { id = sale.id, count = 0, copper = 0 }
+			byItem[sale.id] = line
+			items[#items + 1] = line
+		end
+		line.count, line.copper = line.count + sale.origCount, line.copper + sale.orig
+	end
+	if sum == v.income then return end
+	if type(rec.checks) ~= "table" then rec.checks = {} end
+	local list = rec.checks
+	while #items > MAX_CHECK_ITEMS do items[#items] = nil end
+	list[#list + 1] = { time = time(), diff = v.income - sum, items = items }
+	while #list > MAX_CHECKS do table.remove(list, 1) end
 end
 
 -- Hooks. All after the original call, all installed from ADDON_LOADED, all
@@ -1177,6 +1225,24 @@ local function printItems(ahOnly)
 	end
 end
 
+local function printChecks()
+	local list = rec.checks
+	if type(list) ~= "table" or #list == 0 then
+		S:Print(L.CHECK_NONE)
+		return
+	end
+	S:Print(L.CHECK_HEADER, #list)
+	for i = #list, 1, -1 do
+		local c = list[i]
+		local parts = {}
+		for _, it in ipairs(c.items) do
+			parts[#parts + 1] = format("%s x%d (%s)", itemName(it.id), it.count, moneyText(it.copper))
+		end
+		print(format("  %s %s: %s", date("%Y-%m-%d %H:%M:%S", c.time), accent(signedText(c.diff)),
+			#parts > 0 and concat(parts, ", ") or L.NO_SALES))
+	end
+end
+
 local function command(arg)
 	if not started then
 		S:Print(L.NOT_READY)
@@ -1185,6 +1251,8 @@ local function command(arg)
 	arg = (arg or ""):lower()
 	if arg == "alle" or arg == "all" then
 		printAll()
+	elseif arg == "pruefen" or arg == "check" then
+		printChecks()
 	elseif arg:match("^items") then
 		printItems(arg:match("^items%s+ah$") ~= nil)
 	else

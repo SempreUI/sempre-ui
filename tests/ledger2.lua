@@ -432,4 +432,136 @@ do
 	check(env.today().purchases[104] == nil, "the bid remembers the item name for the refund")
 end
 
+-- Vendor check
+
+do
+	local env = boot()
+	env.bag["0:1"] = { itemID = 100, stackCount = 3 }
+	env.show("Merchant")
+	env.g.C_Container.UseContainerItem(0, 1)
+	env.pay(75)
+	env.hide("Merchant")
+	check(env.rec.checks == nil, "matching sales and income leave no record")
+
+	env.show("Merchant")
+	env.g.C_Container.UseContainerItem(0, 1)
+	env.bag["0:2"] = { itemID = 101, stackCount = 1 }
+	env.g.C_Container.UseContainerItem(0, 2)
+	env.pay(80) -- 75 + 7 expected
+	env.hide("Merchant")
+	local c = env.rec.checks and env.rec.checks[1]
+	check(c and c.diff == -2 and c.time == T0, "a difference is kept with time and size")
+	check(c and #c.items == 2 and c.items[1].id == 100 and c.items[1].count == 3 and c.items[1].copper == 75, "and the items sold in that visit")
+	check(#env.printed == 0, "nothing is printed during play")
+
+	-- Buyback: income stays, the expense is not income.
+	env.show("Merchant")
+	env.g.C_Container.UseContainerItem(0, 1)
+	env.pay(75)
+	env.buyback[1] = { "|Hitem:100:|h", 3 }
+	env.g.BuybackItem(1)
+	env.pay(-75)
+	env.hide("Merchant")
+	check(#env.rec.checks == 1, "a buyback does not make a difference")
+
+	-- Income with no recorded sale.
+	env.show("Merchant")
+	env.pay(50)
+	env.hide("Merchant")
+	check(#env.rec.checks == 2 and env.rec.checks[2].diff == 50 and #env.rec.checks[2].items == 0, "income without sales is a difference too")
+
+	-- A visit without money or sales is nothing.
+	env.show("Merchant")
+	env.hide("Merchant")
+	check(#env.rec.checks == 2, "an empty visit is no difference")
+
+	-- Repairs and purchases are not income.
+	env.show("Merchant")
+	env.g.RepairAllItems()
+	env.pay(-200)
+	env.hide("Merchant")
+	check(#env.rec.checks == 2, "expenses are not compared")
+end
+
+do
+	-- Sales whose price arrives late are not checked.
+	local env = boot()
+	env.prices[100] = nil
+	env.bag["0:1"] = { itemID = 100, stackCount = 2 }
+	env.show("Merchant")
+	env.g.C_Container.UseContainerItem(0, 1)
+	env.pay(61)
+	env.hide("Merchant")
+	check(env.rec.checks == nil, "a visit with a missing price is not checked")
+end
+
+do
+	-- Only the last 20 are kept.
+	local env = boot()
+	for i = 1, 25 do
+		env.show("Merchant")
+		env.pay(i)
+		env.hide("Merchant")
+	end
+	check(#env.rec.checks == 20 and env.rec.checks[1].diff == 6 and env.rec.checks[20].diff == 25, "the newest 20 differences are kept")
+	local saved = env.rec
+	local again = boot({ db = env.db })
+	check(again.rec.checks == saved.checks or #again.rec.checks == 20, "the list is part of the saved data")
+end
+
+do
+	local env = boot()
+	env.S.commands.gold("pruefen")
+	check(env.printed[#env.printed]:find("no differences recorded"), "pruefen without records says so")
+	env.bag["0:1"] = { itemID = 100, stackCount = 3 }
+	env.show("Merchant")
+	env.g.C_Container.UseContainerItem(0, 1)
+	env.pay(73)
+	env.hide("Merchant")
+	env.show("Merchant")
+	env.pay(5)
+	env.hide("Merchant")
+	env.printed = {}
+	env.S.commands.gold("pruefen")
+	local out = env.out()
+	check(out:find("Vendor check: differences between item sales and vendor income %(last 2%)"), "pruefen header")
+	check(out:find("%-0g 0s 2c") and out:find("Item100 x3 %(0g 0s 75c%)"), "pruefen lists the difference and the items: " .. out)
+	check(out:find("%+0g 0s 5c") and out:find("no item sales"), "newest first, empty sales marked")
+	check(out:find("2026%-10%-21 12:00:00"), "with the time")
+	check(out:find("5c.*2c") ~= nil, "newest first order")
+	env.printed = {}
+	env.S.commands.ledger("CHECK")
+	check(#env.printed == 3, "check is an alias")
+end
+
+-- Degraded clients
+
+do
+	local env = boot({ noHooks = true, noInvoice = true })
+	local warned = false
+	for _, line in ipairs(env.bootPrinted) do
+		if line:find("C_AuctionHouse.PlaceBid") and line:find("BuyMerchantItem") then warned = true end
+	end
+	check(warned and #env.errors == 0, "missing auction and merchant hooks are reported")
+	env.show("Merchant")
+	env.pay(-5)
+	check(env.today().expense.vendor == 5 and env.today().purchases == nil, "without hooks money is still booked")
+	env.show("MailInfo")
+	env.inbox[1] = { sender = "A", subject = "Outbid on X", money = 9 }
+	env.g.TakeInboxMoney(1)
+	env.pay(9)
+	check(#env.errors == 0, "no hooks, no errors")
+end
+
+do
+	-- A subject that is not a string never reaches a pattern match.
+	local env = boot()
+	env.inbox[1] = { sender = "A", subject = "S", money = 10, invoice = { "seller", "N", "B", 12, 12, 0, 2 } }
+	env.g.GetInboxHeaderInfo = function() return nil, nil, "A", {}, 10 end
+	env.show("MailInfo")
+	env.g.TakeInboxMoney(1)
+	env.pay(10)
+	check(#env.errors == 0, "a non-string subject is ignored without errors")
+end
+
 end
