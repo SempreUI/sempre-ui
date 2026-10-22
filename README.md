@@ -24,6 +24,8 @@ you use.
 | Command | What it does |
 | --- | --- |
 | `/sempre` | Lists the commands |
+| `/sempre options` (`optionen`, `config`) | Opens the SempreUI category in the game's settings: a switch per module and the options of loaded modules. In combat it opens after combat |
+| `/sempre module` (`modul`) | Lists the modules and their state. `/sempre module <name> on\|off` (`an\|aus`) switches a module for all characters, same as the checkbox; switching on loads it at once, switching off takes effect after `/reload` |
 | `/sempre perf` | Memory per SempreUI module |
 | `/sempre errors` (`fehler`) | Recorded Lua errors and blocked addon actions, SempreUI first; `all` (`alle`) lists every record, `clear` (`leeren`) empties the list |
 | `/sempre version` | Addon version and client build |
