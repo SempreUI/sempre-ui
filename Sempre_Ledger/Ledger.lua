@@ -6,19 +6,34 @@
 -- changed while the module did not run is never booked (the baseline is read at
 -- login). Transfers between own characters are booked as "transfer" and never
 -- count as income or expense in any total. Also records what was sold to
--- vendors, per item and day.
+-- vendors, per item and day, what was sold at the auction house (from mail
+-- invoices), what was paid for items at vendors and the auction house, and
+-- the auction house deposits.
 --
 -- Read-only interface on SempreUI.Ledger:
 --   GetDay(charKey, date)    -> day record { income = {source = copper},
 --                               expense = {...}, vendorItems = {itemID =
 --                               {count, copper}} } or nil. Date is YYYY-MM-DD.
---                               Do not modify it.
+--                               Newer fields exist only when used: auctionItems
+--                               [itemID or name] = {count, gross, cut, deposit,
+--                               net}, purchases[itemID] = {count, copper,
+--                               source}, deposits[itemID] = {count, copper},
+--                               sub = {deposit = copper}. Do not modify it.
 --   GetRange(charKey, days)  -> { income, expense, incomeTotal, expenseTotal,
 --                               net, days } for today and the days-1 before.
 --                               Totals and net leave out "transfer".
 --   GetSession()            -> { start, startMoney, income, expense, net,
 --                               seconds, perHour } or nil before login.
--- Message LEDGER_CHANGED(charKey, source) after each booking.
+--   GetItem(charKey, itemID, days) -> { vendor, vendorCount, auction,
+--                               auctionCount, purchases, purchaseCount,
+--                               deposits } in copper for today and the days-1
+--                               before. auction is gross minus cut (a returned
+--                               deposit is not income); deposits is extra and
+--                               not part of any result.
+--   GetItemAll(itemID, days) -> the same summed over all characters.
+-- Messages: LEDGER_CHANGED(charKey, source) after each booking and
+-- LEDGER_ITEM_CHANGED(charKey, itemID) after each item booking (a vendor sale,
+-- an auction sale, a purchase, a cancelled bid).
 
 local ADDON_NAME = ...
 
@@ -29,6 +44,7 @@ local issecretvalue = issecretvalue
 local C_Container, C_Item, C_EventUtils, C_Merchant, C_Mail = C_Container, C_Item, C_EventUtils, C_Merchant, C_Mail
 local GetMoney, GetTime, GetRealmName, GetLocale = GetMoney, GetTime, GetRealmName, GetLocale
 local GetInboxHeaderInfo, hooksecurefunc = GetInboxHeaderInfo, hooksecurefunc
+local GetMerchantItemLink, GetMerchantItemInfo = GetMerchantItemLink, GetMerchantItemInfo
 
 local Ledger = {}
 S.Ledger = Ledger
@@ -60,8 +76,13 @@ if GetLocale() == "deDE" then
 	L.NO_BOOKINGS = "keine Buchungen"
 	L.ALL_HEADER = "Netto der letzten 7 Tage pro Charakter:"
 	L.TOTAL = "Gesamt"
-	L.ITEMS_HEADER = "Top 10 Händlererlöse der letzten 30 Tage:"
-	L.NO_ITEMS = "Keine Händlerverkäufe erfasst."
+	L.ITEMS_HEADER = "Top 10 Items der letzten 30 Tage nach Ergebnis:"
+	L.NO_ITEMS = "Keine Item-Buchungen erfasst."
+	L.AH_ITEMS_HEADER = "Top 10 Auktionshaus-Verkäufe der letzten 30 Tage nach Ergebnis:"
+	L.NO_AH_ITEMS = "Keine Auktionshaus-Verkäufe erfasst."
+	L.PART_VENDOR = "Händler"
+	L.PART_AUCTION = "Auktion"
+	L.PART_BOUGHT = "Einkauf"
 else
 	L.vendor = "vendor"
 	L.repair = "repair"
@@ -87,19 +108,33 @@ else
 	L.NO_BOOKINGS = "no bookings"
 	L.ALL_HEADER = "Net of the last 7 days per character:"
 	L.TOTAL = "Total"
-	L.ITEMS_HEADER = "Top 10 vendor income of the last 30 days:"
-	L.NO_ITEMS = "No vendor sales recorded."
+	L.ITEMS_HEADER = "Top 10 items of the last 30 days by net result:"
+	L.NO_ITEMS = "No item bookings recorded."
+	L.AH_ITEMS_HEADER = "Top 10 auction house sales of the last 30 days by net result:"
+	L.NO_AH_ITEMS = "No auction house sales recorded."
+	L.PART_VENDOR = "vendor"
+	L.PART_AUCTION = "auction"
+	L.PART_BOUGHT = "bought"
 end
 
 -- Saved data
 -- SempreLedgerDB = { version, chars = { [charKey] = { days = { ["YYYY-MM-DD"] =
 -- { income = {}, expense = {}, vendorItems = {} } }, session = {} } } }
 
-local DB_VERSION = 1
+local DB_VERSION = 2
 local KEEP_DAYS = 90
 local SESSION_GAP = 15 * 60
 -- migrations[n] upgrades a database from version n to n + 1.
-local migrations = {}
+local migrations = {
+	-- 1 -> 2: days get auctionItems, purchases, deposits and sub on demand, so
+	-- nothing is rewritten; only the character containers are made sure of.
+	[1] = function(db)
+		if type(db.chars) ~= "table" then return end
+		for _, r in pairs(db.chars) do
+			if type(r) == "table" and type(r.days) ~= "table" then r.days = {} end
+		end
+	end,
+}
 
 local function initDB()
 	SempreLedgerDB = SempreLedgerDB or {}
@@ -130,6 +165,7 @@ local closedAt = {}
 local incoming = {} -- money in mails from own characters that is being taken: { amount, time }
 local visitSales = {} -- sales of the current merchant visit, newest last
 local pendingSales = {} -- itemID -> sales waiting for the item's sell price
+local pendingSpend = {} -- purchases and deposits waiting for their money change
 
 -- A value the addon must not compute with is dropped.
 local function clean(v)
@@ -153,6 +189,17 @@ local function dayRecord(key)
 		days[key] = day
 	end
 	return day
+end
+
+-- A table of a day that exists only once something is booked into it.
+local function daySub(key, name)
+	local day = dayRecord(key)
+	local t = day[name]
+	if not t then
+		t = {}
+		day[name] = t
+	end
+	return t
 end
 
 local function prune()
@@ -197,17 +244,25 @@ end
 
 -- Booking
 
-local function book(source, diff)
+local function book(source, diff, sub)
 	local day = dayRecord(dayKey(0))
 	local into = diff > 0 and day.income or day.expense
 	local amount = abs(diff)
 	into[source] = (into[source] or 0) + amount
+	if sub then
+		local t = daySub(dayKey(0), "sub")
+		t[sub] = (t[sub] or 0) + amount
+	end
 	if session and source ~= "transfer" then
 		local field = diff > 0 and "income" or "expense"
 		session[field] = (session[field] or 0) + amount
 	end
 	if session then session.last = time() end
 	S:Send("LEDGER_CHANGED", charKey, source)
+end
+
+local function itemChanged(itemKey)
+	S:Send("LEDGER_ITEM_CHANGED", charKey, itemKey)
 end
 
 -- Source by context, first match wins. now is GetTime().
@@ -248,6 +303,8 @@ local function takeIncoming(diff, now)
 	return moved, diff - moved
 end
 
+local takeSpend, settleSpend -- see "Purchases"
+
 local function onMoney()
 	if not started then return end
 	local money = clean(GetMoney())
@@ -274,7 +331,10 @@ local function onMoney()
 			diff = rest
 		end
 	end
-	book(sourceFor(diff, now), diff)
+	local source = sourceFor(diff, now)
+	local spend = diff < 0 and takeSpend(source, now)
+	book(source, diff, spend and spend.kind == "deposit" and "deposit" or nil)
+	if spend then settleSpend(spend, -diff) end
 end
 
 -- Windows. Interaction-manager events first, classic events as fallback; both
@@ -368,6 +428,7 @@ local function recordSale(itemID, count)
 		if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(itemID) end
 	end
 	visitSales[#visitSales + 1] = sale
+	itemChanged(itemID)
 end
 
 local function onItemData(_, itemID, success)
@@ -393,6 +454,7 @@ local function onItemData(_, itemID, success)
 		end
 	end
 	pendingSales[itemID] = nil
+	itemChanged(itemID)
 end
 
 -- A buyback in the same visit takes back the newest matching sales.
@@ -410,7 +472,58 @@ local function reverseSale(itemID, count)
 			sale.copper = sale.copper - copper
 			if entry.count <= 0 then dayRecord(sale.day).vendorItems[itemID] = nil end
 			count = count - take
+			itemChanged(itemID)
 		end
+	end
+end
+
+-- Purchases. A hook only remembers what is being bought or posted; the money
+-- change that follows (while the matching window is open and the booking has
+-- the matching source) says what it cost.
+
+local SPEND_WINDOW = 10
+
+local function addSpend(entry)
+	entry.time = GetTime()
+	pendingSpend[#pendingSpend + 1] = entry
+end
+
+-- entry.kind is "buy" or "deposit"; entry.source is "vendor" or "auction", the
+-- booking source the money change must have.
+function takeSpend(source, now)
+	local found
+	local i = 1
+	while i <= #pendingSpend do
+		local entry = pendingSpend[i]
+		if now - entry.time > SPEND_WINDOW then
+			table.remove(pendingSpend, i)
+		elseif not found and entry.source == source then
+			found = entry
+			table.remove(pendingSpend, i)
+		else
+			i = i + 1
+		end
+	end
+	return found
+end
+
+local function addPurchase(itemID, count, copper, source)
+	local items = daySub(dayKey(0), "purchases")
+	local e = items[itemID]
+	if not e then
+		e = { count = 0, copper = 0, source = source }
+		items[itemID] = e
+	elseif e.source ~= source then
+		e.source = "mixed"
+	end
+	e.count = e.count + count
+	e.copper = e.copper + copper
+end
+
+function settleSpend(entry, copper)
+	if entry.kind == "buy" then
+		addPurchase(entry.id, entry.count, copper, entry.source)
+		itemChanged(entry.id)
 	end
 end
 
@@ -447,6 +560,21 @@ local function onBuyback(index)
 	reverseSale(id, type(count) == "number" and count > 0 and count or 1)
 end
 
+-- Assumptions: BuyMerchantItem(index, quantity) buys quantity items (one stack
+-- if nil), GetMerchantItemLink(index) answers for the index right after the
+-- call and GetMerchantItemInfo returns the quantity per purchase as 4th value.
+local function onBuyMerchant(index, quantity)
+	if not (started and open.merchant and GetMerchantItemLink) then return end
+	local link = clean(GetMerchantItemLink(index))
+	local id = type(link) == "string" and tonumber(link:match("item:(%d+)"))
+	if not id then return end
+	quantity = clean(quantity)
+	if type(quantity) ~= "number" or quantity < 1 then
+		quantity = GetMerchantItemInfo and clean((select(4, GetMerchantItemInfo(index))))
+	end
+	addSpend({ kind = "buy", source = "vendor", id = id, count = type(quantity) == "number" and quantity >= 1 and quantity or 1 })
+end
+
 local function onRepair(guildBankRepair)
 	-- Guild bank repairs cost the player nothing.
 	if started and open.merchant and not guildBankRepair then lastRepair = GetTime() end
@@ -480,6 +608,9 @@ local function installHooks()
 	if not use then use = hook(UseContainerItem, "UseContainerItem", onUseItem) end
 	if not use then missing[#missing + 1] = "UseContainerItem" end
 	if not hook(BuybackItem, "BuybackItem", onBuyback) then missing[#missing + 1] = "BuybackItem" end
+	local buy = hook(BuyMerchantItem, "BuyMerchantItem", onBuyMerchant)
+	buy = hook(C_Merchant and C_Merchant.BuyMerchantItem, C_Merchant, "BuyMerchantItem", onBuyMerchant) or buy
+	if not buy then missing[#missing + 1] = "BuyMerchantItem" end
 
 	if not hook(TakeTaxiNode, "TakeTaxiNode", onFlight) then missing[#missing + 1] = "TakeTaxiNode" end
 
@@ -587,6 +718,71 @@ function Ledger.GetRange(key, days)
 	return res
 end
 
+local function newSums()
+	return { vendor = 0, vendorCount = 0, auction = 0, auctionCount = 0, purchases = 0, purchaseCount = 0, deposits = 0 }
+end
+
+-- Adds the item bookings of one day record into sums[itemKey] (or into one
+-- sums table when only is given).
+local function addDay(day, sums, only)
+	local function at(k)
+		if only ~= nil and k ~= only then return nil end
+		if only ~= nil then return sums end
+		local t = sums[k]
+		if not t then
+			t = newSums()
+			sums[k] = t
+		end
+		return t
+	end
+	for k, v in pairs(day.vendorItems or {}) do
+		local t = at(k)
+		if t then
+			t.vendor, t.vendorCount = t.vendor + v.copper, t.vendorCount + v.count
+		end
+	end
+	for k, v in pairs(day.auctionItems or {}) do
+		local t = at(k)
+		if t then
+			t.auction, t.auctionCount = t.auction + v.gross - v.cut, t.auctionCount + v.count
+		end
+	end
+	for k, v in pairs(day.purchases or {}) do
+		local t = at(k)
+		if t then
+			t.purchases, t.purchaseCount = t.purchases + v.copper, t.purchaseCount + v.count
+		end
+	end
+	for k, v in pairs(day.deposits or {}) do
+		local t = at(k)
+		if t then t.deposits = t.deposits + v.copper end
+	end
+end
+
+-- Item sums of one character over the last days; for one item or for all.
+local function charSums(key, days, sums, only)
+	local r = db and db.chars[key]
+	if not (r and r.days) then return end
+	for offset = 0, days - 1 do
+		local day = r.days[dayKey(offset)]
+		if day then addDay(day, sums, only) end
+	end
+end
+
+function Ledger.GetItem(key, itemID, days)
+	local sums = newSums()
+	charSums(key, days, sums, itemID)
+	return sums
+end
+
+function Ledger.GetItemAll(itemID, days)
+	local sums = newSums()
+	if db then
+		for key in pairs(db.chars) do charSums(key, days, sums, itemID) end
+	end
+	return sums
+end
+
 function Ledger.GetSession()
 	if not session then return nil end
 	local income, expense = session.income or 0, session.expense or 0
@@ -673,36 +869,38 @@ local function printAll()
 	print(format("  %s: %s", L.TOTAL, accent(signedText(total))))
 end
 
-local function printItems()
+-- Top 10 items of the last 30 days by net result: vendor income plus auction
+-- net minus purchases. With ahOnly only items with auction sales, counted
+-- without the vendor income.
+local function printItems(ahOnly)
 	local sums = {}
-	for offset = 0, 29 do
-		local day = Ledger.GetDay(charKey, dayKey(offset))
-		if day then
-			for id, v in pairs(day.vendorItems) do
-				local sum = sums[id]
-				if not sum then
-					sum = { id = id, count = 0, copper = 0 }
-					sums[id] = sum
-				end
-				sum.count = sum.count + v.count
-				sum.copper = sum.copper + v.copper
-			end
+	charSums(charKey, 30, sums)
+	local list = {}
+	for k, t in pairs(sums) do
+		if not ahOnly or t.auctionCount > 0 then
+			t.key = k
+			t.result = (ahOnly and 0 or t.vendor) + t.auction - t.purchases
+			list[#list + 1] = t
 		end
 	end
-	local list = {}
-	for _, sum in pairs(sums) do list[#list + 1] = sum end
 	sort(list, function(a, b)
-		if a.copper ~= b.copper then return a.copper > b.copper end
-		return a.id < b.id
+		if a.result ~= b.result then return a.result > b.result end
+		return tostring(a.key) < tostring(b.key)
 	end)
 	if #list == 0 then
-		S:Print(L.NO_ITEMS)
+		S:Print(ahOnly and L.NO_AH_ITEMS or L.NO_ITEMS)
 		return
 	end
-	S:Print(L.ITEMS_HEADER)
+	S:Print(ahOnly and L.AH_ITEMS_HEADER or L.ITEMS_HEADER)
 	for i = 1, math.min(10, #list) do
-		local sum = list[i]
-		print(format("  %s x%d: %s", itemName(sum.id), sum.count, accent(moneyText(sum.copper))))
+		local t = list[i]
+		local name = type(t.key) == "number" and itemName(t.key) or t.key
+		local parts = {}
+		if not ahOnly and t.vendor ~= 0 then parts[#parts + 1] = format("%s %s", L.PART_VENDOR, signedText(t.vendor)) end
+		if t.auctionCount > 0 or t.auction ~= 0 then parts[#parts + 1] = format("%s %s", L.PART_AUCTION, signedText(t.auction)) end
+		if t.purchases ~= 0 then parts[#parts + 1] = format("%s %s", L.PART_BOUGHT, signedText(-t.purchases)) end
+		local count = ahOnly and t.auctionCount or t.vendorCount + t.auctionCount
+		print(format("  %s x%d: %s (%s)", name, count, accent(signedText(t.result)), concat(parts, ", ")))
 	end
 end
 
@@ -714,8 +912,8 @@ local function command(arg)
 	arg = (arg or ""):lower()
 	if arg == "alle" or arg == "all" then
 		printAll()
-	elseif arg == "items" then
-		printItems()
+	elseif arg:match("^items") then
+		printItems(arg:match("^items%s+ah$") ~= nil)
 	else
 		S:Print(L.HEADER, charKey)
 		local s = Ledger.GetSession()
