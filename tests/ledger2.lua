@@ -173,7 +173,6 @@ do
 	env.inbox[1] = saleMail("Item101", 10000, 500, 200, 2)
 	env.show("MailInfo")
 	-- The mail is gone from the inbox once the money is taken; the invoice was read before.
-	local mail = env.inbox[1]
 	env.inbox[1] = { sender = "Auction House", subject = "Auction successful: Item101", money = 0 }
 	env.g.TakeInboxMoney(1)
 	env.pay(9700)
@@ -187,7 +186,7 @@ do
 	-- A second sale of the same item adds up; the mailbox stays open.
 	env.inbox[1] = saleMail("Item101", 3000, 150, 50, 1)
 	env.fire("MAIL_INBOX_UPDATE")
-	mail = env.inbox[1]
+	local mail = env.inbox[1]
 	env.g.TakeInboxMoney(1)
 	env.pay(mail.money)
 	check(e.count == 3 and e.gross == 13000 and e.cut == 650 and e.net == 12600, "sales of one item add up")
@@ -295,6 +294,142 @@ do
 	plain.g.TakeInboxMoney(1)
 	plain.pay(500)
 	check(plain.today().income.auction == 500 and plain.today().auctionItems == nil, "without invoices a sold-subject mail is plain auction money")
+end
+
+-- Deposits
+
+do
+	local env = boot()
+	env.g.C_AuctionHouse.PostItem({ itemID = 101 }, 2, 5, 100, 200)
+	env.pay(-30)
+	check(env.today().expense.other == 30 and env.today().deposits == nil, "posting without the auction house open books nothing special")
+	env.show("Auctioneer")
+	env.g.C_AuctionHouse.PostItem({ itemID = 101 }, 2, 5, 100, 200)
+	env.pay(-30)
+	check(env.today().expense.auction == 30 and env.today().sub.deposit == 30, "deposit: auction expense with sub-kind deposit")
+	local d = env.today().deposits[101]
+	check(d and d.count == 5 and d.copper == 30, "deposit per posted item")
+	env.g.C_AuctionHouse.PostCommodity({ itemID = 101 }, 2, 10, 55)
+	env.pay(-45)
+	check(d.count == 15 and d.copper == 75 and env.today().sub.deposit == 75, "commodity posts add up")
+	env.g.C_AuctionHouse.PostItem({}, 1, 1, 1, 1)
+	env.pay(-8)
+	check(env.today().sub.deposit == 83 and env.today().expense.auction == 83, "unknown posted item: deposit without item")
+	env.pay(-4)
+	check(env.today().expense.auction == 87 and env.today().sub.deposit == 83, "only the next change is a deposit")
+	check(env.Ledger.GetItem("Tester-Realm", 101, 1).deposits == 75, "deposits per item through the interface")
+	check(env.Ledger.GetRange("Tester-Realm", 1).expense.auction == 87, "deposits are auction expense in the range")
+end
+
+-- Auction purchases and outbid refunds
+
+do
+	local env = boot()
+	env.show("Auctioneer")
+	env.g.C_AuctionHouse.ConfirmCommoditiesPurchase(103, 20)
+	env.pay(-5000)
+	local p = env.today().purchases[103]
+	check(p and p.count == 20 and p.copper == 5000 and p.source == "auction", "commodity purchase: item, count, copper, source")
+	check(env.today().expense.auction == 5000 and not env.today().sub, "booked as auction expense, no deposit")
+	env.merchant[1] = { "|Hitem:103:|h", 1 }
+	env.hide("Auctioneer")
+	env.show("Merchant")
+	env.g.BuyMerchantItem(1, 1)
+	env.pay(-7)
+	check(p.count == 21 and p.copper == 5007 and p.source == "mixed", "one item from both sources is mixed")
+	env.hide("Merchant")
+	env.show("Auctioneer")
+	env.g.C_AuctionHouse.ConfirmCommoditiesPurchase(103, 5)
+	env.show("Merchant")
+	env.pay(-3)
+	check(p.count == 21, "an auction purchase waits for an auction booking")
+end
+
+do
+	local env = boot()
+	env.nameLinks.Item104 = 104
+	env.auctions[7] = { itemKey = { itemID = 104 }, quantity = 3, buyoutAmount = 9000 }
+	env.show("Auctioneer")
+	env.g.C_AuctionHouse.PlaceBid(7, 4000)
+	env.pay(-4000)
+	local p = env.today().purchases[104]
+	check(p and p.count == 3 and p.copper == 4000 and p.source == "auction", "a bid is a purchase when the money leaves")
+	env.hide("Auctioneer")
+
+	-- Another bid for the same price on another item is not cancelled by this refund.
+	env.inbox[1] = { sender = "Auction House", subject = "Outbid on Other", money = 4000 }
+	env.show("MailInfo")
+	env.g.TakeInboxMoney(1)
+	env.pay(4000)
+	check(p.count == 3, "a refund for another item cancels nothing")
+	env.inbox[1] = { sender = "Auction House", subject = "Outbid on Item104", money = 3999 }
+	env.fire("MAIL_INBOX_UPDATE")
+	env.g.TakeInboxMoney(1)
+	env.pay(3999)
+	check(p.count == 3, "a refund of another amount cancels nothing")
+	env.inbox[1] = { sender = "Auction House", subject = "Outbid on Item104", money = 4000 }
+	env.fire("MAIL_INBOX_UPDATE")
+	env.g.TakeInboxMoney(1)
+	env.pay(4000)
+	check(env.today().purchases[104] == nil, "the outbid refund cancels the bid purchase")
+	check(env.Ledger.GetItem("Tester-Realm", 104, 1).purchases == 0, "and the item sums show it")
+	check(env.today().income.auction == 4000 + 3999 + 4000 and env.today().auctionItems == nil, "the refund is auction money, not a sale")
+	env.g.TakeInboxMoney(1)
+	env.pay(4000)
+	check(env.today().purchases[104] == nil and #env.errors == 0, "a refund cancels a bid once")
+end
+
+do
+	-- A buyout is not refunded; a bid refund a day later cancels yesterday's purchase.
+	local env = boot()
+	env.nameLinks.Item104 = 104
+	env.auctions[7] = { itemKey = { itemID = 104 }, quantity = 1, buyoutAmount = 9000 }
+	env.show("Auctioneer")
+	env.g.C_AuctionHouse.PlaceBid(7, 9000)
+	env.pay(-9000)
+	env.g.C_AuctionHouse.PlaceBid(7, 5000)
+	env.pay(-5000)
+	local first = env.today().purchases[104]
+	check(first.count == 2 and first.copper == 14000, "buyout and bid both count as purchases")
+	env.hide("Auctioneer")
+	local yesterday = env.today()
+	env.now = env.now + DAY
+	env.inbox[1] = { sender = "Auction House", subject = "Outbid on Item104", money = 9000 }
+	env.show("MailInfo")
+	env.g.TakeInboxMoney(1)
+	env.pay(9000)
+	check(first.count == 2, "a buyout cannot be refunded")
+	env.inbox[1] = { sender = "Auction House", subject = "Outbid on Item104", money = 5000 }
+	env.fire("MAIL_INBOX_UPDATE")
+	env.g.TakeInboxMoney(1)
+	env.pay(5000)
+	check(yesterday.purchases[104].count == 1 and yesterday.purchases[104].copper == 9000, "the refund reaches back to the day of the bid")
+	local seen
+	env.S:Listen("LEDGER_ITEM_CHANGED", function(_, _, id) seen = id end)
+	env.inbox[1] = { sender = "Auction House", subject = "Outbid on Item104", money = 5000 }
+	env.fire("MAIL_INBOX_UPDATE")
+	env.g.TakeInboxMoney(1)
+	env.pay(5000)
+	check(seen == nil, "no matching bid, no item change")
+end
+
+do
+	-- Bid by name when the refund name cannot be resolved.
+	local env = boot()
+	env.prices[104] = 1
+	env.g.C_Item.GetItemInfo = function(id)
+		if id == 104 then return "Bidded Thing", "link" end
+	end
+	env.auctions[7] = { itemKey = { itemID = 104 }, quantity = 1, buyoutAmount = 0 }
+	env.show("Auctioneer")
+	env.g.C_AuctionHouse.PlaceBid(7, 700)
+	env.pay(-700)
+	env.hide("Auctioneer")
+	env.inbox[1] = { sender = "Auction House", subject = "Outbid on Bidded Thing", money = 700 }
+	env.show("MailInfo")
+	env.g.TakeInboxMoney(1)
+	env.pay(700)
+	check(env.today().purchases[104] == nil, "the bid remembers the item name for the refund")
 end
 
 end

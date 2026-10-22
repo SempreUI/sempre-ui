@@ -68,6 +68,13 @@ local function boot(opts)
 		end,
 		RequestLoadItemDataByID = function(id) env.requested[#env.requested + 1] = id end,
 	}
+	env.auctions = {} -- auctionID -> auction info
+	g.C_AuctionHouse = {
+		PostItem = function() end, PostCommodity = function() end,
+		ConfirmCommoditiesPurchase = function() end, PlaceBid = function() end,
+		GetAuctionInfoByID = function(id) return env.auctions[id] end,
+	}
+	g.C_Item.GetItemID = function(location) return location.itemID end
 	g.C_Container = {
 		UseContainerItem = function() end,
 		GetContainerItemInfo = function(bag, slot) return env.bag[bag .. ":" .. slot] end,
