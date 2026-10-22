@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: |cffc8794aSempre|r Buttons
+## Notes: Collects the buttons other addons put around the minimap behind one SempreUI button with a fold-out panel.
+## Notes-deDE: Sammelt die Knöpfe anderer Addons rund um die Minikarte hinter einem SempreUI-Knopf mit ausklappbarem Feld.
+## Author: SempreUI
+## IconTexture: Interface\AddOns\Sempre\Media\Icon
+## Version: @project-version@
+## Dependencies: Sempre
+## LoadOnDemand: 1
+## SavedVariables: SempreButtonsDB
+## X-Sempre-Module: 1
+## X-Sempre-Budget-KB: 40
+## X-Sempre-LoadWith: Login
+## X-License: GPL-3.0-only
+
+Buttons.lua

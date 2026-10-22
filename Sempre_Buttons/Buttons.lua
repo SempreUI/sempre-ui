@@ -1,0 +1,2 @@
+-- Copyright (C) 2026 SempreUI
+-- SPDX-License-Identifier: GPL-3.0-only, with additional terms in NAMING.md
