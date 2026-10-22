@@ -13,6 +13,7 @@ globals = {
 	"SempreLedgerDB",
 	"SempreLootDB",
 	"SempreMapDB",
+	"SempreRaresDB",
 	"SempreWayDB",
 	"SLASH_SEMPRE1",
 	"SLASH_SEMPREWAY1",
@@ -116,5 +117,8 @@ read_globals = {
 	"IsInInstance",
 	"UIErrorsFrame",
 	"C_MapExplorationInfo",
+	"C_Sound",
+	"SOUNDKIT",
+	"UnitIsPlayer",
 }
 
