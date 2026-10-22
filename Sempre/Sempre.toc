@@ -12,4 +12,5 @@
 ## X-Wago-ID: nGv9xvKx
 
 Core.lua
+Fonts.lua
 Settings.lua

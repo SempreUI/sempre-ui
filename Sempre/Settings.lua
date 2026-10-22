@@ -241,10 +241,20 @@ local function addOptionPage(moduleName)
 	pages[moduleName] = sub
 	for _, opt in ipairs(list) do
 		local key = opt.key
-		addCheckbox(sub, "SempreUI_" .. moduleName .. "_" .. key, pick(opt.label), opt.default and true or false,
+		-- A reason from opt.disabled() greys the option out and joins its tooltip.
+		local reason = opt.disabled and opt.disabled()
+		local tip = pick(opt.tooltip) or ""
+		if reason then tip = tip .. (tip ~= "" and "\n" or "") .. reason end
+		local init = addCheckbox(sub, "SempreUI_" .. moduleName .. "_" .. key, pick(opt.label), opt.default and true or false,
 			function() return S:GetOption(moduleName, key) end,
-			function(value) S:SetOption(moduleName, key, value) end,
-			pick(opt.tooltip) or "")
+			function(value)
+				if reason then return end
+				S:SetOption(moduleName, key, value)
+			end,
+			tip)
+		-- Assumption: AddModifyPredicate on a settings initializer greys it out
+		-- while the predicate returns false.
+		if reason and init and init.AddModifyPredicate then init:AddModifyPredicate(function() return false end) end
 	end
 end
 
@@ -282,13 +292,14 @@ local function buildCanvas()
 	local title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 	title:SetPoint("TOPLEFT", 16, -16)
 	title:SetText(CATEGORY_NAME)
+	S:SetFont(title, "title", 16)
 	local widgets, used = {}, 0
 	local reload = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
 	reload:SetText(L.RELOAD)
 	reload:SetScript("OnClick", reloadGame)
 	local refresh
 
-	local function checkbox(label, getter, setter)
+	local function checkbox(label, getter, setter, reason)
 		used = used + 1
 		local w = widgets[used]
 		if not w then
@@ -296,8 +307,9 @@ local function buildCanvas()
 			widgets[used] = w
 		end
 		w:SetPoint("TOPLEFT", 16, -40 - used * 26)
-		w.Text:SetText(label)
+		w.Text:SetText(reason and (label .. " (" .. reason .. ")") or label)
 		w:SetChecked(getter())
+		if w.SetEnabled then w:SetEnabled(not reason) end
 		w:SetScript("OnClick", function(self)
 			setter(self:GetChecked() and true or false)
 			refresh()
@@ -320,7 +332,8 @@ local function buildCanvas()
 				local key = opt.key
 				checkbox(optionTitle(moduleName) .. ": " .. pick(opt.label),
 					function() return S:GetOption(moduleName, key) end,
-					function(value) S:SetOption(moduleName, key, value) end)
+					function(value) S:SetOption(moduleName, key, value) end,
+					opt.disabled and opt.disabled())
 			end
 		end
 		for i = used + 1, #widgets do widgets[i]:Hide() end
