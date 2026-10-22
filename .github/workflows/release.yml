@@ -2,8 +2,7 @@ name: Release
 
 # A tag like v0.1.0-alpha1 builds SempreUI.zip and uploads it to GitHub,
 # CurseForge and Wago. Tags with "alpha" or "beta" are marked as such.
-# Project IDs come from the repository variables CF_PROJECT_ID and WAGO_ID;
-# an empty variable skips that site.
+# The CurseForge and Wago project IDs are read from Sempre/Sempre.toc.
 
 on:
   push:
@@ -30,7 +29,3 @@ jobs:
 
       - name: Package and upload
         uses: BigWigsMods/packager@v2
-        with:
-          args: >-
-            ${{ vars.CF_PROJECT_ID && format('-p {0}', vars.CF_PROJECT_ID) || '' }}
-            ${{ vars.WAGO_ID && format('-a {0}', vars.WAGO_ID) || '' }}
