@@ -32,6 +32,7 @@ you use.
 | `/sempre items` | Gold per character, age of bank and mail snapshots (`debug`: scan count) |
 | `/sempre gold` (`ledger`) | Gold journal of this character: session, today and last 7 days by source; `all` (`alle`) shows the last 7 days per character, `items` the top 10 vendor sales of the last 30 days |
 | `/sempre loot` | Loot memory: this session (kills, gathers, money, item value, gold per hour) and farm goals. `goal <item> <count>` (`ziel`) sets a goal, `goal remove <item>` (`ziel weg`) removes it, `where <item>` (`wo`) lists the best mobs and nodes for an item, `mob` shows the drop table of the target or the last looted mob, `top` ranks mobs by value per kill. Everything is learned from your own looting |
+| `/sempre post` (`mail`) | Mail per character from the snapshots of the mailbox: mails, money, items, earliest expiry and snapshot age, or "never opened". At the mailbox a panel lists every mail with "Take all" (never pays cash on delivery) and a warning names characters whose mail expires within 3 days |
 
 ## License
 
