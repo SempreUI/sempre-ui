@@ -5,6 +5,7 @@ manual-changelog: CHANGELOG.md
 # Every module needs its own line here.
 move-folders:
   SempreUI/Sempre: Sempre
+  SempreUI/Sempre_Buttons: Sempre_Buttons
   SempreUI/Sempre_Items: Sempre_Items
   SempreUI/Sempre_Ledger: Sempre_Ledger
   SempreUI/Sempre_Loot: Sempre_Loot

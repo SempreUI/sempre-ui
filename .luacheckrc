@@ -7,6 +7,7 @@ exclude_files = { "libs/", ".release/" }
 globals = {
 	"SempreUI",
 	"SempreDB",
+	"SempreButtonsDB",
 	"SempreItemsDB",
 	"SempreLedgerDB",
 	"SempreLootDB",
@@ -97,5 +98,11 @@ read_globals = {
 	"AUCTION_REMOVED_MAIL_SUBJECT",
 	"AUCTION_CANCELLED_MAIL_SUBJECT",
 	"AUCTION_WON_MAIL_SUBJECT",
+	"Minimap",
+	"MinimapCluster",
+	"MinimapBackdrop",
+	"GetMinimapShape",
+	"GetCursorPosition",
+	"C_Timer",
 }
 
