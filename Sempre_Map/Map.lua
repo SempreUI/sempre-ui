@@ -13,9 +13,10 @@
 local ADDON_NAME = ...
 
 local S = SempreUI
-local type, format = type, string.format
+local type, pairs, ipairs, format, tostring = type, pairs, ipairs, string.format, tostring
+local ceil, min = math.ceil, math.min
 local issecretvalue, hooksecurefunc = issecretvalue, hooksecurefunc
-local C_Map = C_Map
+local C_Map, C_MapExplorationInfo = C_Map, C_MapExplorationInfo
 local CreateFrame, GetLocale, UnitLevel = CreateFrame, GetLocale, UnitLevel
 
 local Map = {}
@@ -46,6 +47,10 @@ else
 end
 
 local TICK = 0.1
+local MAX_MAPS = 400
+local TILE = 256
+local BASE_W, BASE_H = 1002, 668 -- size the overlay offsets refer to; assumption
+local OVERLAY_ALPHA = 0.6
 local BAR_HEIGHT = 18
 local RANGE_GREY_ABOVE = 5 -- player more than this above the maximum: grey
 local RANGE_YELLOW_BELOW = 2 -- minimum up to this above the player: yellow
@@ -59,6 +64,7 @@ local COLORS = {
 
 local ui -- frames, built the first time the map opens
 local driver
+local refreshExplored
 local accumulated = 0
 local mapHooked = false
 local noApiSaid = false
@@ -228,6 +234,7 @@ Map.Update = update
 local function refresh()
 	if not (ui and mapIsShown()) then return end
 	refreshLevelLine()
+	refreshExplored()
 	update()
 end
 Map.Refresh = refresh
@@ -237,6 +244,167 @@ local function onDriverUpdate(_, elapsed)
 	if accumulated < TICK then return end
 	accumulated = 0
 	update()
+end
+
+-- Explored areas. Assumption: C_MapExplorationInfo.GetExploredMapTextures(mapID)
+-- returns a list of { textureWidth, textureHeight, offsetX, offsetY,
+-- fileDataIDs, isDrawOnTopLayer, isShownByMouseOver }, empty or nil where the
+-- map has no overlays.
+
+local function db()
+	return SempreMapDB
+end
+
+local function overlayKey(o)
+	return tostring(o.x) .. ":" .. tostring(o.y) .. ":" .. tostring(o.ids[1])
+end
+
+-- A clean copy of one overlay, or nil when it is unusable or mouse-over only.
+local function normalize(t)
+	if type(t) ~= "table" or clean(t.isShownByMouseOver) then return end
+	local w, h, x, y = clean(t.textureWidth), clean(t.textureHeight), clean(t.offsetX), clean(t.offsetY)
+	local src = t.fileDataIDs
+	if not (isNum(w) and isNum(h) and isNum(x) and isNum(y) and w > 0 and h > 0 and type(src) == "table") then return end
+	local ids = {}
+	for i, id in ipairs(src) do
+		if not isNum(id) then return end
+		ids[i] = id
+	end
+	if #ids == 0 then return end
+	return { w = w, h = h, x = x, y = y, top = clean(t.isDrawOnTopLayer) and true or false, ids = ids }
+end
+
+-- What this character has explored on a map: overlays and a set of their keys.
+local function readExplored(map)
+	local list, keys = {}, {}
+	if not (C_MapExplorationInfo and C_MapExplorationInfo.GetExploredMapTextures and isNum(map)) then return list, keys end
+	for _, t in ipairs(C_MapExplorationInfo.GetExploredMapTextures(map) or {}) do
+		local o = normalize(t)
+		if o then
+			list[#list + 1] = o
+			keys[overlayKey(o)] = true
+		end
+	end
+	return list, keys
+end
+
+local function storedCount()
+	local n = 0
+	for _ in pairs(db().explored) do n = n + 1 end
+	return n
+end
+
+-- Drops the least recently seen maps until the cap holds; keep is never dropped.
+local function enforceCap(keep)
+	local data = db()
+	while storedCount() > MAX_MAPS do
+		local oldest, oldestSeen
+		for id in pairs(data.explored) do
+			local seen = data.seen[id] or 0
+			if id ~= keep and (not oldestSeen or seen < oldestSeen) then oldest, oldestSeen = id, seen end
+		end
+		if not oldest then return end
+		data.explored[oldest], data.seen[oldest] = nil, nil
+	end
+end
+
+-- Merges this character's overlays into the account-wide store: one entry per
+-- overlay, so nothing is stored twice.
+function Map.Record(map, list)
+	local data = db()
+	if not (data and isNum(map)) then return end
+	local stored = data.explored[map]
+	if not stored and #list == 0 then return end
+	if not stored then
+		stored = {}
+		data.explored[map] = stored
+	end
+	local have = {}
+	for _, o in ipairs(stored) do have[overlayKey(o)] = true end
+	for _, o in ipairs(list) do
+		local key = overlayKey(o)
+		if not have[key] then
+			have[key] = true
+			stored[#stored + 1] = o
+		end
+	end
+	data.seq = (data.seq or 0) + 1
+	data.seen[map] = data.seq
+	enforceCap(map)
+end
+
+-- Overlays stored for a map that the list of keys does not contain.
+function Map.Foreign(map, keys)
+	local out = {}
+	local stored = db() and db().explored[map]
+	for _, o in ipairs(stored or {}) do
+		if not keys[overlayKey(o)] then out[#out + 1] = o end
+	end
+	return out
+end
+
+-- Tiles of one overlay: row-major grid of 256 pixel tiles, the last row and
+-- column sized to what remains. Each is { id, col, row, w, h } (col and row
+-- count from 0, in pixels of the overlay).
+function Map.Tiles(o)
+	local cols, rows = ceil(o.w / TILE), ceil(o.h / TILE)
+	local out = {}
+	for r = 0, rows - 1 do
+		for c = 0, cols - 1 do
+			local id = o.ids[r * cols + c + 1]
+			if id then
+				out[#out + 1] = { id = id, col = c * TILE, row = r * TILE,
+					w = min(TILE, o.w - c * TILE), h = min(TILE, o.h - r * TILE) }
+			end
+		end
+	end
+	return out
+end
+
+local function hideOverlays()
+	if not (ui and ui.tiles) then return end
+	for i = 1, #ui.tiles do ui.tiles[i]:Hide() end
+end
+
+local function drawOverlays(foreign)
+	hideOverlays()
+	local sx, sy = ui.canvas:GetWidth() / BASE_W, ui.canvas:GetHeight() / BASE_H
+	local used = 0
+	for _, o in ipairs(foreign) do
+		for _, t in ipairs(Map.Tiles(o)) do
+			used = used + 1
+			local tex = ui.tiles[used]
+			if not tex then
+				tex = ui.overlay:CreateTexture(nil, "BACKGROUND")
+				ui.tiles[used] = tex
+			end
+			tex:SetDrawLayer(o.top and "ARTWORK" or "BACKGROUND")
+			tex:SetTexture(t.id)
+			tex:SetTexCoord(0, t.w / TILE, 0, t.h / TILE)
+			tex:SetDesaturated(true)
+			tex:SetAlpha(OVERLAY_ALPHA)
+			tex:SetSize(t.w * sx, t.h * sy)
+			tex:ClearAllPoints()
+			tex:SetPoint("TOPLEFT", ui.overlay, "TOPLEFT", (o.x + t.col) * sx, -(o.y + t.row) * sy)
+			tex:Show()
+		end
+	end
+end
+
+function refreshExplored()
+	if not (ui and db()) then return end
+	local map = shownMap()
+	if not map then
+		hideOverlays()
+		return
+	end
+	local list, keys = readExplored(map)
+	Map.Record(map, list)
+	if option("show_explored") then
+		drawOverlays(Map.Foreign(map, keys))
+	else
+		hideOverlays()
+	end
 end
 
 -- Frames, built the first time the map opens.
@@ -297,6 +465,12 @@ local function build()
 	hover:Hide()
 	ui.hover = hover
 
+	-- Same level as the canvas, so below the pins (children, one level up).
+	local overlay = CreateFrame("Frame", nil, canvas)
+	overlay:SetAllPoints(canvas)
+	ui.overlay = overlay
+	ui.tiles = {}
+
 	Map.ui = ui
 	return true
 end
@@ -332,7 +506,17 @@ end
 
 -- Command
 
-local function command()
+local function command(input)
+	local word = (input or ""):lower():match("^%s*(%S*)")
+	if word == "vergessen" or word == "forget" then
+		local data = db()
+		if data then
+			data.explored, data.seen, data.seq = {}, {}, 0
+		end
+		refresh()
+		S:Print(L.FORGOTTEN)
+		return
+	end
 	local map = C_Map and C_Map.GetBestMapForUnit and clean(C_Map.GetBestMapForUnit("player"))
 	if isNum(map) then
 		local lo, hi = levelsOf(map)
@@ -345,7 +529,7 @@ local function command()
 	else
 		S:Print(L.NO_MAP)
 	end
-
+	S:Print(L.STORED, db() and storedCount() or 0)
 end
 
 -- Start
@@ -354,7 +538,11 @@ local function onLoaded(_, name)
 	if name ~= ADDON_NAME then return end
 	S:Off("ADDON_LOADED", onLoaded)
 	SempreMapDB = SempreMapDB or {}
-	SempreMapDB.version = SempreMapDB.version or 1
+	local data = SempreMapDB
+	data.version = data.version or 1
+	if type(data.explored) ~= "table" then data.explored = {} end
+	if type(data.seen) ~= "table" then data.seen = {} end
+	if type(data.seq) ~= "number" then data.seq = 0 end
 
 	S:RegisterOptions(ADDON_NAME, {
 		{
@@ -366,6 +554,11 @@ local function onLoaded(_, name)
 			key = "show_coords", default = true,
 			label = { de = "Koordinaten auf der Karte", en = "Coordinates on the map" },
 			tooltip = { de = "Eine schmale Leiste unten auf der Weltkarte mit deinen Koordinaten und denen des Mauszeigers.", en = "A thin bar at the bottom of the world map with your coordinates and those of the cursor." },
+		},
+		{
+			key = "show_explored", default = true,
+			label = { de = "Von anderen Charakteren erkundete Gebiete zeigen", en = "Show areas explored on other characters" },
+			tooltip = { de = "Gebiete, die ein anderer Charakter deines Accounts erkundet hat, erscheinen auf der Karte blass und entsättigt.", en = "Areas another character of your account has explored show on the map, pale and desaturated." },
 		},
 	})
 
