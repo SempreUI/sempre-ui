@@ -30,6 +30,10 @@ local fakeMethods = {
 	Disable = function(self) self.enabled = false end,
 	IsEnabled = function(self) return self.enabled end,
 	GetChecked = function(self) return self.checked end,
+	SetFont = function(self, path, size, flags)
+		self.font = { path = path, size = size, flags = flags }
+		return true
+	end,
 	SetScript = function(self, kind, fn) self.scripts[kind] = fn end,
 	GetHeight = function(self) return self.height or 424 end,
 	SetHeight = function(self, h) self.height = h end,
@@ -160,6 +164,8 @@ local function boot(opts)
 	end
 	env.g = g
 	run("Sempre/Core.lua", "Sempre")
+	g._G = g
+	run("Sempre/Fonts.lua", "Sempre")
 	env.S = g.SempreUI
 	env.core = env.frames[1]
 	function env.fire(event, ...) env.core.scripts.OnEvent(env.core, event, ...) end
@@ -516,6 +522,25 @@ do
 	check(out:find("Fresh: never opened", 1, true), "post: never opened")
 	check(out:find("Total: 3 mails, 2g 2s 50c, 10 items", 1, true), "post: total line")
 	check(#env.errors == 0, "post: no errors")
+end
+
+-- Fonts: title, text and mono roles
+
+do
+	local env = boot({ inbox = listInbox() })
+	env.open()
+	local F = env.S.Fonts
+	local rows = env.rows()
+	check(rows[1].count.font.path == F.mono and rows[1].money.font.path == F.mono and rows[1].days.font.path == F.mono,
+		"mail rows: count, money and days use the mono role")
+	check(rows[1].sender.font.path == F.text and env.Mail.ui.total.font.path == F.text, "mail rows and total line use the text role")
+	local titles = 0
+	for _, f in ipairs(env.frames) do
+		if type(f.font) == "table" and f.font.path == F.title then titles = titles + 1 end
+	end
+	check(titles == 1, "mail panel has one title in the title role")
+	env.S:SetOption("Sempre", "fonts", false)
+	check(rows[1].money.font.path == "Fonts\\FRIZQT__.TTF" and rows[1].money.font.size == 11, "switching the option off puts the game font on open panels, same size")
 end
 
 end
