@@ -29,6 +29,7 @@ you use.
 | `/sempre font` (`schrift`) | Which fonts are active, the client language and whether game fonts are replaced |
 | `/sempre perf` | Memory per SempreUI module |
 | `/sempre errors` (`fehler`) | Recorded Lua errors and blocked addon actions, SempreUI first; `all` (`alle`) lists every record, `clear` (`leeren`) empties the list |
+| `/sempre neu` (`news`) | Opens the "what's new" window with the release notes in your client language (German or English). It opens once by itself after an update (not on a first install, not in combat); the option "Show what's new after updates" switches that off |
 | `/sempre version` | Addon version and client build |
 | `/sempre items` | Gold per character, age of bank and mail snapshots (`debug`: scan count) |
 | `/sempre gold` (`ledger`) | Gold journal of this character: session, today and last 7 days by source; `all` (`alle`) shows the last 7 days per character, `items` the top 10 items of the last 30 days by net result (vendor income plus auction net minus purchases, each part listed), `items ah` only items sold at the auction house, `pruefen` (`check`) the last 20 differences between recorded vendor sales and vendor income |

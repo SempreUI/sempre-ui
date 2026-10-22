@@ -11,4 +11,10 @@ Thanks for helping! A few rules keep SempreUI light and clean:
 - Code must pass `luacheck .` without warnings.
 - In combat, only display. No decisions based on secret values.
 
+## Releases
+
+When a new `CHANGELOG.md` entry is added for a release, add a matching entry
+(German and English points, no links) to `Sempre/News.lua` in the same pull
+request.
+
 Feedback and ideas are welcome as GitHub issues.
