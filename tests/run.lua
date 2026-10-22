@@ -407,6 +407,7 @@ end
 local bootItems = dofile("tests/items.lua")(check, same)
 dofile("tests/ledger.lua")(check)
 local bootLoot = dofile("tests/loot.lua")(check)
+dofile("tests/mail.lua")(check, same)
 dofile("tests/settings.lua")(check, same, { items = bootItems, loot = bootLoot })
 
 print(string.format("%d checks, %d failed", count, failures))
