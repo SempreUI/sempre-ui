@@ -105,6 +105,5 @@ read_globals = {
 	"GetCursorPosition",
 	"C_Timer",
 	"STANDARD_TEXT_FONT",
-	"UISpecialFrames",
 }
 

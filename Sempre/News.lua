@@ -24,7 +24,7 @@ S.News = {
 	},
 	{
 		version = "0.1.0-alpha1",
-		date = "20.10.2026",
+		date = "22.10.2026",
 		points = {
 			{ de = "Gegenstände: Taschen, Bank, Post und Gold aller Charaktere im Tooltip", en = "Items: bags, bank, mail and gold of all characters in the tooltip" },
 			{ de = "Goldjournal: jede Geldänderung nach Quelle, pro Sitzung, Tag und Woche", en = "Gold journal: every money change by source, per session, day and week" },

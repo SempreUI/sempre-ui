@@ -78,9 +78,7 @@ local function boot(opts)
 	function env.fire(event, ...) frame.scripts.OnEvent(frame, event, ...) end
 	function env.registered(e) return events[e] == true end
 	function env.window()
-		for _, f in ipairs(env.frames) do
-			if f.name == "SempreNewsFrame" then return f end
-		end
+		return env.S.newsFrame
 	end
 	function env.shown() local w = env.window() return w ~= nil and w.shown end
 	function env.flush()
@@ -145,6 +143,9 @@ do
 	local again = boot({ db = env.S.db })
 	again.login()
 	check(not again.window(), "second start after first install: still no window")
+	local existing = boot({ db = { global = { options = {} } } })
+	existing.login()
+	check(existing.shown(), "saved data from before the news window: notes are shown")
 end
 
 -- Option
@@ -191,14 +192,11 @@ do
 	env.window():Hide()
 	env.g.SlashCmdList.SEMPRE("news")
 	check(env.shown(), "/sempre news opens it again")
-	check(env.window().template == "BackdropTemplate" and #env.g.UISpecialFrames == 1 and env.g.UISpecialFrames[1] == "SempreNewsFrame",
-		"registered in the special frames list")
-	local before = 0
-	for _, f in ipairs(env.frames) do if f.name == "SempreNewsFrame" then before = before + 1 end end
+	local w = env.window()
+	check(w.template == "BackdropTemplate" and type(w.name) ~= "string" and #env.g.UISpecialFrames == 0,
+		"the window has no global name and is not in the special frames list")
 	env.g.SlashCmdList.SEMPRE("neu")
-	local after = 0
-	for _, f in ipairs(env.frames) do if f.name == "SempreNewsFrame" then after = after + 1 end end
-	check(before == 1 and after == 1 and #env.g.UISpecialFrames == 1, "the window is built only once")
+	check(env.window() == w, "the window is built only once")
 	local plain = boot({ db = old(), noSpecial = true })
 	plain.g.SlashCmdList.SEMPRE("neu")
 	check(plain.shown(), "works without a special-frames list")
