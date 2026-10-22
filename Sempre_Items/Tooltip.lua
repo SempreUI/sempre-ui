@@ -65,6 +65,7 @@ end
 -- from erroring.
 local function onItem(tooltip, data)
 	if tooltip ~= GameTooltip and tooltip ~= ItemRefTooltip then return end
+	if not S:GetOption(ADDON_NAME, "tooltip") then return end
 	local id = data and data.id
 	if type(id) ~= "number" or (issecretvalue and issecretvalue(id)) then return end
 	if cacheVersion ~= Items.version then
@@ -84,6 +85,13 @@ end
 local function onLoaded(_, name)
 	if name ~= ADDON_NAME then return end
 	S:Off("ADDON_LOADED", onLoaded)
+	S:RegisterOptions(ADDON_NAME, {
+		{
+			key = "tooltip", default = true,
+			label = { de = "Besitz im Item-Tooltip", en = "Owners in the item tooltip" },
+			tooltip = { de = "Zeigt im Tooltip eines Gegenstands, welche Charaktere ihn besitzen.", en = "Shows in an item tooltip which characters own it." },
+		},
+	})
 	local types = Enum and Enum.TooltipDataType
 	if not (TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and types and types.Item) then
 		S:Print(L.NO_TOOLTIP)

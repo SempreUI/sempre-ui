@@ -829,6 +829,7 @@ end
 
 local function onUnit(tooltip, data)
 	if not started or tooltip ~= GameTooltip then return end
+	if not S:GetOption(ADDON_NAME, "tooltip") then return end
 	if InCombatLockdown() then return end
 	local guid = data and clean(data.guid)
 	if type(guid) ~= "string" then return end
@@ -1177,6 +1178,13 @@ local function onLoaded(_, name)
 	if name ~= ADDON_NAME then return end
 	S:Off("ADDON_LOADED", onLoaded)
 	db = initDB()
+	S:RegisterOptions(ADDON_NAME, {
+		{
+			key = "tooltip", default = true,
+			label = { de = "Wert pro Kill im Gegner-Tooltip", en = "Value per kill in the unit tooltip" },
+			tooltip = { de = "Zeigt im Tooltip eines Gegners, was ein Kill im Schnitt wert ist.", en = "Shows in a unit tooltip what a kill is worth on average." },
+		},
+	})
 	onOptional("LOOT_OPENED", onLootOpened)
 	onOptional("LOOT_CLOSED", onLootClosed)
 	onOptional("PLAYER_MONEY", onMoney)
