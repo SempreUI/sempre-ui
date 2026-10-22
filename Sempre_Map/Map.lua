@@ -14,7 +14,7 @@ local ADDON_NAME = ...
 
 local S = SempreUI
 local type, pairs, ipairs, format, tostring = type, pairs, ipairs, string.format, tostring
-local ceil, min = math.ceil, math.min
+local ceil = math.ceil
 local issecretvalue, hooksecurefunc = issecretvalue, hooksecurefunc
 local C_Map, C_MapExplorationInfo = C_Map, C_MapExplorationInfo
 local CreateFrame, GetLocale, UnitLevel = CreateFrame, GetLocale, UnitLevel
@@ -49,7 +49,7 @@ end
 local TICK = 0.1
 local MAX_MAPS = 400
 local TILE = 256
-local BASE_W, BASE_H = 1002, 668 -- size the overlay offsets refer to; assumption
+local MIN_FILE = 16
 local OVERLAY_ALPHA = 0.6
 local BAR_HEIGHT = 18
 local RANGE_GREY_ABOVE = 5 -- player more than this above the maximum: grey
@@ -246,7 +246,7 @@ local function onDriverUpdate(_, elapsed)
 	update()
 end
 
--- Explored areas. Assumption: C_MapExplorationInfo.GetExploredMapTextures(mapID)
+-- Explored areas. Offsets and sizes are in canvas units. Assumption: C_MapExplorationInfo.GetExploredMapTextures(mapID)
 -- returns a list of { textureWidth, textureHeight, offsetX, offsetY,
 -- fileDataIDs, isDrawOnTopLayer, isShownByMouseOver }, empty or nil where the
 -- map has no overlays.
@@ -343,18 +343,50 @@ function Map.Foreign(map, keys)
 	return out
 end
 
--- Tiles of one overlay: row-major grid of 256 pixel tiles, the last row and
--- column sized to what remains. Each is { id, col, row, w, h } (col and row
--- count from 0, in pixels of the overlay).
-function Map.Tiles(o)
-	local cols, rows = ceil(o.w / TILE), ceil(o.h / TILE)
+-- Tile size of the first art layer of a map. Assumption:
+-- C_Map.GetMapArtLayers(mapID) returns a list of layers with tileWidth and
+-- tileHeight; 256 where the call is missing or returns nothing.
+local function tileSize(map)
+	if C_Map and C_Map.GetMapArtLayers and isNum(map) then
+		local layers = C_Map.GetMapArtLayers(map)
+		local layer = type(layers) == "table" and layers[1]
+		if layer and isNum(layer.tileWidth) and isNum(layer.tileHeight) and layer.tileWidth > 0 and layer.tileHeight > 0 then
+			return layer.tileWidth, layer.tileHeight
+		end
+	end
+	return TILE, TILE
+end
+Map.TileSize = tileSize
+
+-- Smallest power of two that is at least 16 and not below n.
+local function fileSize(n)
+	local size = MIN_FILE
+	while size < n do size = size * 2 end
+	return size
+end
+
+-- Pixels of tile i (0 based) of n along a length: the remainder in the last
+-- one, a full tile when nothing remains.
+local function pixels(length, tile, i, n)
+	if i < n - 1 then return tile end
+	local rest = length % tile
+	return rest == 0 and tile or rest
+end
+
+-- Tiles of one overlay: row-major grid of tw by th tiles. Each is { id, col,
+-- row, w, h, fw, fh } (col and row in canvas units from the overlay's corner,
+-- w and h the pixels used, fw and fh the size of the texture file).
+function Map.Tiles(o, tw, th)
+	tw, th = tw or TILE, th or TILE
+	local cols, rows = ceil(o.w / tw), ceil(o.h / th)
 	local out = {}
 	for r = 0, rows - 1 do
 		for c = 0, cols - 1 do
 			local id = o.ids[r * cols + c + 1]
 			if id then
-				out[#out + 1] = { id = id, col = c * TILE, row = r * TILE,
-					w = min(TILE, o.w - c * TILE), h = min(TILE, o.h - r * TILE) }
+				local w, h = pixels(o.w, tw, c, cols), pixels(o.h, th, r, rows)
+				out[#out + 1] = { id = id, col = c * tw, row = r * th, w = w, h = h,
+					fw = c < cols - 1 and tw or fileSize(w), fh = r < rows - 1 and th or fileSize(h) }
 			end
 		end
 	end
@@ -366,12 +398,24 @@ local function hideOverlays()
 	for i = 1, #ui.tiles do ui.tiles[i]:Hide() end
 end
 
-local function drawOverlays(foreign)
+-- Part 1 draws on the first art layer only. Assumption: the scroll container
+-- has :GetCurrentLayerIndex(); without it the first layer is taken as shown.
+local function onFirstLayer()
+	local container = ui.container
+	if container and container.GetCurrentLayerIndex then
+		local index = container:GetCurrentLayerIndex()
+		if isNum(index) and index ~= 1 then return false end
+	end
+	return true
+end
+
+local function drawOverlays(map, foreign)
 	hideOverlays()
-	local sx, sy = ui.canvas:GetWidth() / BASE_W, ui.canvas:GetHeight() / BASE_H
+	if not onFirstLayer() then return end
+	local tw, th = tileSize(map)
 	local used = 0
 	for _, o in ipairs(foreign) do
-		for _, t in ipairs(Map.Tiles(o)) do
+		for _, t in ipairs(Map.Tiles(o, tw, th)) do
 			used = used + 1
 			local tex = ui.tiles[used]
 			if not tex then
@@ -380,12 +424,12 @@ local function drawOverlays(foreign)
 			end
 			tex:SetDrawLayer(o.top and "ARTWORK" or "BACKGROUND")
 			tex:SetTexture(t.id)
-			tex:SetTexCoord(0, t.w / TILE, 0, t.h / TILE)
+			tex:SetTexCoord(0, t.w / t.fw, 0, t.h / t.fh)
 			tex:SetDesaturated(true)
 			tex:SetAlpha(OVERLAY_ALPHA)
-			tex:SetSize(t.w * sx, t.h * sy)
+			tex:SetSize(t.w, t.h)
 			tex:ClearAllPoints()
-			tex:SetPoint("TOPLEFT", ui.overlay, "TOPLEFT", (o.x + t.col) * sx, -(o.y + t.row) * sy)
+			tex:SetPoint("TOPLEFT", ui.overlay, "TOPLEFT", o.x + t.col, -(o.y + t.row))
 			tex:Show()
 		end
 	end
@@ -401,7 +445,7 @@ function refreshExplored()
 	local list, keys = readExplored(map)
 	Map.Record(map, list)
 	if option("show_explored") then
-		drawOverlays(Map.Foreign(map, keys))
+		drawOverlays(map, Map.Foreign(map, keys))
 	else
 		hideOverlays()
 	end
