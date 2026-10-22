@@ -6,14 +6,15 @@
 --                            the newest version of SempreUI.News as seen
 -- Opens once by itself after an update (option "news" of the core, default
 -- on), never on a first install, and not in combat (it waits for combat end).
--- The last seen version lives in SempreDB.global.newsSeen (nil: first install).
+-- The last seen version lives in SempreDB.global.newsSeen. The window has no
+-- global name (no globals beyond SempreUI), so it closes with its button only.
 -- Command: /sempre neu (news).
 
 local S = SempreUI
 local L = S.L
 local CreateFrame, GetLocale, InCombatLockdown = CreateFrame, GetLocale, InCombatLockdown
-local C_Timer, UIParent, UISpecialFrames = C_Timer, UIParent, UISpecialFrames
-local ipairs, type, tinsert = ipairs, type, table.insert
+local C_Timer, UIParent = C_Timer, UIParent
+local ipairs = ipairs
 
 local DE = GetLocale() == "deDE"
 local LANG = DE and "de" or "en"
@@ -28,7 +29,6 @@ else
 end
 
 local PLAIN = "Interface\\Buttons\\WHITE8X8"
-local FRAME_NAME = "SempreNewsFrame"   -- needed only for the game's special-frames list
 local WIDTH, HEIGHT, PAD, LIST_W = 440, 380, 14, 380
 local OPEN_DELAY = 3
 
@@ -75,7 +75,7 @@ local function fill(child)
 end
 
 local function build()
-	frame = CreateFrame("Frame", FRAME_NAME, UIParent, "BackdropTemplate")
+	frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
 	frame:SetSize(WIDTH, HEIGHT)
 	frame:SetPoint("CENTER")
 	frame:SetFrameStrata("DIALOG")
@@ -113,8 +113,6 @@ local function build()
 	scroll:SetScrollChild(child)
 	fill(child)
 
-	-- Escape closes it where the game keeps a special-frames list.
-	if type(UISpecialFrames) == "table" then tinsert(UISpecialFrames, FRAME_NAME) end
 	frame:SetScript("OnHide", markSeen)
 	S.newsFrame = frame
 	ready = true
@@ -153,7 +151,7 @@ S:On("PLAYER_LOGIN", function()
 	local global = S.db and S.db.global
 	if not (version and global) then return end
 	local seen = global.newsSeen
-	if seen == nil then
+	if seen == nil and S.freshInstall then
 		global.newsSeen = version   -- first install: no changelog for new players
 	elseif seen ~= version and S:GetOption("Sempre", "news") then
 		pending = true

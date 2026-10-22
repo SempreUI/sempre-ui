@@ -550,6 +550,8 @@ end
 
 S:On("ADDON_LOADED", function(_, name)
 	if name ~= ADDON_NAME then return end
+	-- No saved data yet: a first install (the news window stays quiet).
+	S.freshInstall = SempreDB == nil
 	SempreDB = SempreDB or {}
 	applyDefaults(SempreDB, defaults)
 	S.db = SempreDB
