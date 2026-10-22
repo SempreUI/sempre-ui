@@ -210,7 +210,10 @@ end
 --   SempreUI:RegisterOptions(moduleName, list) -- call from the module's own
 --       ADDON_LOADED. list = { { key = "x", default = true,
 --       label = { de = "...", en = "..." }, tooltip = { de = "...", en = "..." } } }
---       (tooltip optional; checkboxes only). Registering again replaces the list.
+--       (tooltip optional; checkboxes only; disabled optional: a function
+--       returning a reason text when the option is unavailable, the settings
+--       window greys it out and adds the reason to the tooltip).
+--       Registering again replaces the list.
 --   SempreUI:GetOption(moduleName, key)        -- stored value or the default
 --   SempreUI:SetOption(moduleName, key, value) -- stores, sends OPTION_CHANGED
 -- Values live in SempreDB.global.options[moduleName][key], only when they
@@ -556,6 +559,18 @@ S:On("ADDON_LOADED", function(_, name)
 			key = "login_message", default = true,
 			label = { de = "Begrüßung im Chat beim Login", en = "Login message in chat" },
 			tooltip = { de = "Zeigt beim Login die Zeile mit der Version.", en = "Shows the line with the version at login." },
+		},
+		{
+			key = "fonts", default = true,
+			label = { de = "SempreUI-Schriften", en = "SempreUI fonts" },
+			tooltip = { de = "Benutzt in den SempreUI-Fenstern die Schriften Grenze und Atkinson Hyperlegible. Aus: Spielschriften.", en = "Uses the Grenze and Atkinson Hyperlegible fonts in SempreUI windows. Off: game fonts." },
+			disabled = function() return S.FontLockReason and S:FontLockReason() end,
+		},
+		{
+			key = "game_fonts", default = false,
+			label = { de = "Auch Spielschriften ersetzen", en = "Replace game fonts too" },
+			tooltip = { de = "Ersetzt die Schrift der gängigen Spielschriftobjekte (Text, Tooltips, Chat, Quests). Manche Fenster ändern sich erst nach /reload.", en = "Replaces the font of the game's common font objects (text, tooltips, chat, quests). Some frames only change after /reload." },
+			disabled = function() return S.FontLockReason and S:FontLockReason() end,
 		},
 	})
 end)

@@ -104,5 +104,6 @@ read_globals = {
 	"GetMinimapShape",
 	"GetCursorPosition",
 	"C_Timer",
+	"STANDARD_TEXT_FONT",
 }
 

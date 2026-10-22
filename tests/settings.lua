@@ -123,6 +123,7 @@ local function boot(opts)
 			g.Settings.CreateCheckbox = function(cat, setting, tip)
 				local init = { cat = cat, setting = setting, tip = tip, data = { tooltip = tip } }
 				function init:GetData() return self.data end
+				function init:AddModifyPredicate(fn) self.modify = fn end
 				st.checkboxes[#st.checkboxes + 1] = init
 				return init
 			end
@@ -147,6 +148,8 @@ local function boot(opts)
 	env.S = g.SempreUI
 	env.core = frames[1]
 	function env.fire(event, ...) env.core.scripts.OnEvent(env.core, event, ...) end
+	g._G = g
+	run("Sempre/Fonts.lua", "Sempre")
 	run("Sempre/Settings.lua", "Sempre")
 	env.S:Listen("OPTION_CHANGED", function(_, mod, key, value)
 		env.messages[#env.messages + 1] = mod .. ":" .. key .. ":" .. tostring(value)
@@ -320,7 +323,7 @@ end
 do
 	local env = boot()
 	local S = env.S
-	check(env.sub("General") and #env.pageBoxes("General") == 1, "core page holds the login option")
+	check(env.sub("General") and #env.pageBoxes("General") == 3, "core page holds the login and font options")
 	local box = env.pageBoxes("General")[1]
 	check(box.setting.name == "Login message in chat" and box.setting.default == true and box.tip:find("version", 1, true), "label, default and tooltip of the option")
 	box.setting.set(false)
@@ -333,6 +336,21 @@ do
 	check(#env.pageBoxes("Sempre Items") == 1, "one checkbox on it")
 	S:RegisterOptions("Sempre_Items", { { key = "t", default = true, label = { de = "T", en = "Tee" } } })
 	check(#env.st.subs == 2, "registering again does not add a second page")
+end
+
+-- Font options: greyed out with the reason in a guarded language
+
+do
+	local env = boot({ locale = "koKR" })
+	local boxes = env.pageBoxes("General")
+	check(boxes[1].modify == nil and boxes[2].modify and boxes[2].modify() == false and boxes[3].modify and boxes[3].modify() == false,
+		"koKR: both font options are greyed out, the login option is not")
+	check(boxes[2].tip:find("no glyphs", 1, true), "koKR: the tooltip says why")
+	boxes[2].setting.set(false)
+	check(env.S:GetOption("Sempre", "fonts") == true, "koKR: a greyed option cannot be changed")
+	local en = boot()
+	check(en.pageBoxes("General")[2].modify == nil, "enUS: font option is not greyed")
+	check(en.pageBoxes("General")[3].tip:find("/reload", 1, true), "the game font option names /reload in its tooltip")
 end
 
 -- Slash fallback
