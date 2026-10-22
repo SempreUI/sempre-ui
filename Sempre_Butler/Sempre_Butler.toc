@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: |cffc8794aSempre|r Butler
+## Notes: Small chores done for you. Sells grey junk and repairs at the merchant, accepts resurrections, declines duels and hides the red error text, each one switchable.
+## Notes-deDE: Kleine Aufgaben, die dir abgenommen werden. Verkauft Schrott und repariert beim Händler, nimmt Wiederbelebungen an, lehnt Duelle ab und blendet den roten Fehlertext aus, alles einzeln schaltbar.
+## Author: SempreUI
+## IconTexture: Interface\AddOns\Sempre\Media\Icon
+## Version: @project-version@
+## Dependencies: Sempre
+## LoadOnDemand: 1
+## SavedVariables: SempreButlerDB
+## X-Sempre-Module: 1
+## X-Sempre-Budget-KB: 40
+## X-Sempre-LoadWith: Login
+## X-License: GPL-3.0-only
+
+Butler.lua

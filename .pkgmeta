@@ -6,6 +6,7 @@ manual-changelog: CHANGELOG.md
 move-folders:
   SempreUI/Sempre: Sempre
   SempreUI/Sempre_Buttons: Sempre_Buttons
+  SempreUI/Sempre_Butler: Sempre_Butler
   SempreUI/Sempre_Items: Sempre_Items
   SempreUI/Sempre_Ledger: Sempre_Ledger
   SempreUI/Sempre_Loot: Sempre_Loot
