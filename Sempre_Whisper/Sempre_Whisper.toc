@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: |cffc8794aSempre|r Whisper
+## Notes: Whisper windows. Every conversation gets its own small window with tabs, answers go back from the same window, recent conversations survive a reload. Whispers during encounters are filed afterwards.
+## Notes-deDE: Flüsterfenster. Jede Unterhaltung bekommt ein eigenes kleines Fenster mit Reitern, Antworten gehen aus demselben Fenster zurück, letzte Unterhaltungen überstehen ein Neuladen. Flüstern während Bosskämpfen wird danach einsortiert.
+## Author: SempreUI
+## IconTexture: Interface\AddOns\Sempre\Media\Icon
+## Version: @project-version@
+## Dependencies: Sempre
+## LoadOnDemand: 1
+## SavedVariables: SempreWhisperDB
+## X-Sempre-Module: 1
+## X-Sempre-Budget-KB: 80
+## X-Sempre-LoadWith: Login
+## X-License: GPL-3.0-only
+
+Whisper.lua
