@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: |cffc8794aSempre|r Map
+## Notes: World map helpers. Zone level ranges, coordinates of you and the cursor, and areas explored on your other characters.
+## Notes-deDE: Helfer für die Weltkarte. Stufenbereiche der Gebiete, Koordinaten von dir und vom Mauszeiger und Gebiete, die deine anderen Charaktere erkundet haben.
+## Author: SempreUI
+## IconTexture: Interface\AddOns\Sempre\Media\Icon
+## Version: @project-version@
+## Dependencies: Sempre
+## LoadOnDemand: 1
+## SavedVariables: SempreMapDB
+## X-Sempre-Module: 1
+## X-Sempre-Budget-KB: 120
+## X-Sempre-LoadWith: Login
+## X-License: GPL-3.0-only
+
+Map.lua
