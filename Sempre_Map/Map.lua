@@ -468,6 +468,7 @@ local function build()
 	-- Same level as the canvas, so below the pins (children, one level up).
 	local overlay = CreateFrame("Frame", nil, canvas)
 	overlay:SetAllPoints(canvas)
+	raise(overlay, canvas, 0)
 	ui.overlay = overlay
 	ui.tiles = {}
 
