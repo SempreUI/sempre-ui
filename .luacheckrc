@@ -51,6 +51,7 @@ read_globals = {
 	"GetBuybackItemLink",
 	"SendMail",
 	"C_Mail",
+	"C_AuctionHouse",
 	"TakeInboxMoney",
 	"AutoLootMailItem",
 	"TakeTaxiNode",

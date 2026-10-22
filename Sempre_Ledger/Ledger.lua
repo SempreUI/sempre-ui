@@ -42,7 +42,7 @@ local pairs, ipairs, type, format, tonumber, floor, abs, select = pairs, ipairs,
 local time, date, sort, concat, max = time, date, table.sort, table.concat, math.max
 local issecretvalue = issecretvalue
 local C_Container, C_Item, C_EventUtils, C_Merchant, C_Mail = C_Container, C_Item, C_EventUtils, C_Merchant, C_Mail
-local GetInboxNumItems, GetInboxInvoiceInfo = GetInboxNumItems, GetInboxInvoiceInfo
+local GetInboxNumItems, GetInboxInvoiceInfo, C_AuctionHouse = GetInboxNumItems, GetInboxInvoiceInfo, C_AuctionHouse
 local GetMoney, GetTime, GetRealmName, GetLocale = GetMoney, GetTime, GetRealmName, GetLocale
 local GetInboxHeaderInfo, hooksecurefunc = GetInboxHeaderInfo, hooksecurefunc
 local GetMerchantItemLink, GetMerchantItemInfo = GetMerchantItemLink, GetMerchantItemInfo
@@ -529,9 +529,40 @@ local function addPurchase(itemID, count, copper, source)
 	e.copper = e.copper + copper
 end
 
+local BID_DAYS, MAX_BIDS = 3, 30
+
+local function nameOf(itemID)
+	if not (C_Item and C_Item.GetItemInfo) then return nil end
+	local name = clean((C_Item.GetItemInfo(itemID)))
+	if type(name) == "string" and name ~= "" then return name end
+	return nil
+end
+
+-- A bid that may still be refunded when someone outbids it. The refund mail
+-- names the item and returns exactly the bid, which is how it is matched.
+local function addBid(entry, copper)
+	if type(rec.bids) ~= "table" then rec.bids = {} end
+	local bids, now = rec.bids, time()
+	for i = #bids, 1, -1 do
+		if now - bids[i].time > BID_DAYS * 86400 then table.remove(bids, i) end
+	end
+	bids[#bids + 1] = { id = entry.id, name = nameOf(entry.id), count = entry.count, copper = copper, day = dayKey(0), time = now }
+	while #bids > MAX_BIDS do table.remove(bids, 1) end
+end
+
 function settleSpend(entry, copper)
 	if entry.kind == "buy" then
 		addPurchase(entry.id, entry.count, copper, entry.source)
+		if entry.bid then addBid(entry, copper) end
+		itemChanged(entry.id)
+	elseif entry.id then
+		local items = daySub(dayKey(0), "deposits")
+		local e = items[entry.id]
+		if not e then
+			e = { count = 0, copper = 0 }
+			items[entry.id] = e
+		end
+		e.count, e.copper = e.count + entry.count, e.copper + copper
 		itemChanged(entry.id)
 	end
 end
@@ -574,6 +605,16 @@ local function subjectKind(subject)
 		if name then return def[1], name end
 	end
 	return nil
+end
+
+local function rememberName(itemID)
+	local name = nameOf(itemID)
+	if not name or seenNames[name] then return end
+	if seenCount >= 200 then
+		seenNames, seenCount = {}, 0
+	end
+	seenNames[name] = itemID
+	seenCount = seenCount + 1
 end
 
 -- Assumptions: C_Item.GetItemInfoInstant(name) returns the item ID first and
@@ -755,6 +796,45 @@ local function onBuyMerchant(index, quantity)
 	addSpend({ kind = "buy", source = "vendor", id = id, count = type(quantity) == "number" and quantity >= 1 and quantity or 1 })
 end
 
+-- Assumptions: C_AuctionHouse.PostItem(itemLocation, duration, quantity, ...)
+-- and PostCommodity(itemLocation, duration, quantity, ...) take the quantity
+-- as 3rd argument, and C_Item.GetItemID(itemLocation) gives the item.
+local function onPost(location, _, quantity)
+	if not (started and open.auction) then return end
+	local id = C_Item and C_Item.GetItemID and clean(C_Item.GetItemID(location))
+	if type(id) ~= "number" or id <= 0 then id = nil else rememberName(id) end
+	quantity = clean(quantity)
+	addSpend({ kind = "deposit", source = "auction", id = id, count = type(quantity) == "number" and quantity >= 1 and quantity or 1 })
+end
+
+-- ConfirmCommoditiesPurchase(itemID, quantity): the price is the money change.
+local function onConfirmCommodity(itemID, quantity)
+	if not (started and open.auction) then return end
+	itemID, quantity = clean(itemID), clean(quantity)
+	if type(itemID) ~= "number" or itemID <= 0 then return end
+	rememberName(itemID)
+	addSpend({ kind = "buy", source = "auction", id = itemID, count = type(quantity) == "number" and quantity >= 1 and quantity or 1 })
+end
+
+-- Assumptions: PlaceBid(auctionID, bidAmount) is used for bids and buyouts;
+-- C_AuctionHouse.GetAuctionInfoByID(auctionID) answers right after the call
+-- with a table holding itemKey.itemID, quantity and buyoutAmount. A bid at or
+-- above the buyout is a buyout, which no outbid refund can follow.
+local function onPlaceBid(auctionID, amount)
+	if not (started and open.auction and C_AuctionHouse and C_AuctionHouse.GetAuctionInfoByID) then return end
+	local info = C_AuctionHouse.GetAuctionInfoByID(auctionID)
+	if type(info) ~= "table" then return end
+	local key, count, buyout = clean(info.itemKey), clean(info.quantity), clean(info.buyoutAmount)
+	local id = type(key) == "table" and clean(key.itemID)
+	if type(id) ~= "number" or id <= 0 then return end
+	amount = clean(amount)
+	rememberName(id)
+	addSpend({
+		kind = "buy", source = "auction", id = id, count = type(count) == "number" and count >= 1 and count or 1,
+		bid = not (type(buyout) == "number" and buyout > 0 and type(amount) == "number" and amount >= buyout),
+	})
+end
+
 local function onRepair(guildBankRepair)
 	-- Guild bank repairs cost the player nothing.
 	if started and open.merchant and not guildBankRepair then lastRepair = GetTime() end
@@ -794,6 +874,15 @@ local function installHooks()
 	local buy = hook(BuyMerchantItem, "BuyMerchantItem", onBuyMerchant)
 	buy = hook(C_Merchant and C_Merchant.BuyMerchantItem, C_Merchant, "BuyMerchantItem", onBuyMerchant) or buy
 	if not buy then missing[#missing + 1] = "BuyMerchantItem" end
+
+	local ah = C_AuctionHouse
+	local post = hook(ah and ah.PostItem, ah, "PostItem", onPost)
+	post = hook(ah and ah.PostCommodity, ah, "PostCommodity", onPost) or post
+	if not post then missing[#missing + 1] = "C_AuctionHouse.PostItem" end
+	if not hook(ah and ah.ConfirmCommoditiesPurchase, ah, "ConfirmCommoditiesPurchase", onConfirmCommodity) then
+		missing[#missing + 1] = "C_AuctionHouse.ConfirmCommoditiesPurchase"
+	end
+	if not hook(ah and ah.PlaceBid, ah, "PlaceBid", onPlaceBid) then missing[#missing + 1] = "C_AuctionHouse.PlaceBid" end
 
 	if not hook(TakeTaxiNode, "TakeTaxiNode", onFlight) then missing[#missing + 1] = "TakeTaxiNode" end
 
