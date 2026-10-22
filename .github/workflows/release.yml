@@ -1,13 +1,16 @@
 name: Release
 
-# A tag like v0.1.0-alpha1 builds SempreUI.zip and uploads it to GitHub,
-# CurseForge and Wago. Tags with "alpha" or "beta" are marked as such.
-# The CurseForge and Wago project IDs are read from Sempre/Sempre.toc.
+# A release starts when CHANGELOG.md on main gets a new top entry
+# "## v<version>". The workflow tags that commit, builds SempreUI.zip and
+# uploads it to GitHub, CurseForge and Wago. Versions with "alpha" or "beta"
+# are marked as such. The CurseForge and Wago project IDs are read from
+# Sempre/Sempre.toc. Pushing a tag v* by hand works as well.
 
 on:
   push:
+    branches: [main]
+    paths: [CHANGELOG.md]
     tags: ['v*']
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -24,8 +27,27 @@ jobs:
         with:
           fetch-depth: 0
 
-      - run: sudo apt-get update && sudo apt-get install -y lua5.1
-      - run: lua5.1 tests/run.lua
+      - name: Tag the new changelog version
+        if: github.ref_type == 'branch'
+        id: tag
+        run: |
+          version=$(grep -m1 -oE '^## v[0-9A-Za-z.+-]+' CHANGELOG.md | cut -c4-)
+          if [ -z "$version" ] || git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
+            echo "No new version in CHANGELOG.md."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name SempreUI
+          git config user.email SempreUI@users.noreply.github.com
+          git tag -a "$version" -m "SempreUI $version"
+          git push origin "$version"
+          git checkout -q "$version"
+
+      - if: steps.tag.outputs.skip != 'true'
+        run: sudo apt-get update && sudo apt-get install -y lua5.1
+      - if: steps.tag.outputs.skip != 'true'
+        run: lua5.1 tests/run.lua
 
       - name: Package and upload
+        if: steps.tag.outputs.skip != 'true'
         uses: BigWigsMods/packager@v2

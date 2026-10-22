@@ -1,5 +1,7 @@
 package-as: SempreUI
 
+manual-changelog: CHANGELOG.md
+
 # Every module needs its own line here.
 move-folders:
   SempreUI/Sempre: Sempre
@@ -17,4 +19,5 @@ ignore:
   - .github
   - .luacheckrc
   - tests
+  - CHANGELOG.md
   - docs
