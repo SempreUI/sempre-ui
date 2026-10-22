@@ -8,5 +8,7 @@
 ## SavedVariables: SempreDB
 ## X-Sempre-Budget-KB: 300
 ## X-License: GPL-3.0-only
+## X-Curse-Project-ID: 1759155
+## X-Wago-ID: nGv9xvKx
 
 Core.lua
