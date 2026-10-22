@@ -1,0 +1,6 @@
+# Names SempreUI calls only behind a feature check, in case a later client
+# adds them. The API watch does not report them as missing.
+fn C_Mail.SendMail
+fn C_Mail.TakeInboxItem
+fn C_Merchant.BuyMerchantItem
+fn C_Merchant.RepairAllItems

@@ -1,0 +1,46 @@
+name: API watch
+
+# Weekly check of the Forever client's generated API documentation (mirrored in
+# Gethe/wow-ui-source, branch "forever") against tools/api-forever.txt and the
+# names SempreUI uses. Opens or updates one issue labelled "api-watch".
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y lua5.1
+      - name: Fetch the API documentation
+        run: |
+          git clone -q --depth 1 --filter=blob:none --sparse -b forever https://github.com/Gethe/wow-ui-source ui-source
+          git -C ui-source sparse-checkout set Interface/AddOns/Blizzard_APIDocumentationGenerated
+          echo "BUILD=$(git -C ui-source log -1 --format=%s)" >> "$GITHUB_ENV"
+      - name: Compare
+        id: compare
+        run: |
+          lua5.1 tools/api-dump.lua ui-source/Interface/AddOns/Blizzard_APIDocumentationGenerated > fresh.txt
+          set +e
+          lua5.1 tools/api-watch.lua fresh.txt tools/api-forever.txt "$BUILD" > report.md
+          echo "changed=$?" >> "$GITHUB_OUTPUT"
+          cat report.md
+      - name: Open or update the issue
+        if: steps.compare.outputs.changed == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create api-watch --color C8794A --description "Blizzard API changes" 2>/dev/null || true
+          num=$(gh issue list --label api-watch --state open --json number --jq '.[0].number')
+          if [ -n "$num" ]; then
+            gh issue edit "$num" --body-file report.md
+          else
+            gh issue create --title "API watch: Forever API changed" --label api-watch --body-file report.md
+          fi
