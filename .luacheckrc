@@ -15,6 +15,7 @@ globals = {
 	"SempreMapDB",
 	"SempreRaresDB",
 	"SempreWayDB",
+	"SempreWhisperDB",
 	"SLASH_SEMPRE1",
 	"SLASH_SEMPREWAY1",
 	"SlashCmdList",
@@ -120,5 +121,8 @@ read_globals = {
 	"C_Sound",
 	"SOUNDKIT",
 	"UnitIsPlayer",
+	"C_ChatInfo",
+	"C_BattleNet",
+	"SetItemRef",
 }
 

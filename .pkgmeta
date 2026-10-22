@@ -14,6 +14,7 @@ move-folders:
   SempreUI/Sempre_Mail: Sempre_Mail
   SempreUI/Sempre_Rares: Sempre_Rares
   SempreUI/Sempre_Way: Sempre_Way
+  SempreUI/Sempre_Whisper: Sempre_Whisper
 
 ignore:
   - README.md
