@@ -69,6 +69,10 @@ local function boot(opts)
 	g.GetBuybackItemLink = function(i) return env.buyback[i] and env.buyback[i][1] end
 	g.GetBuybackItemInfo = function(i) return "n", 0, 0, env.buyback[i] and env.buyback[i][2] end
 	g.TakeTaxiNode = function() end
+	env.merchant = {} -- index -> { link, perPurchase }
+	g.BuyMerchantItem = function() end
+	g.GetMerchantItemLink = function(i) return env.merchant[i] and env.merchant[i][1] end
+	g.GetMerchantItemInfo = function(i) return "n", 0, 0, env.merchant[i] and env.merchant[i][2] or 1 end
 	g.SendMail = function() end
 	g.TakeInboxMoney = function() end
 	env.inbox = {} -- index -> { sender, money }
@@ -130,6 +134,8 @@ local function boot(opts)
 	function env.out() return table.concat(env.printed, "\n") end
 	return env
 end
+-- Shared with tests/ledger2.lua.
+local bootShared = boot
 
 local function key(offset) return os.date("%Y-%m-%d", T0 - offset * DAY) end
 
@@ -138,7 +144,7 @@ local function key(offset) return os.date("%Y-%m-%d", T0 - offset * DAY) end
 do
 	local env = boot()
 	check(#env.errors == 0, "module loads without handler errors: " .. tostring(env.errors[1]))
-	check(env.db.version == 1 and env.rec and next(env.rec.days) == nil, "login books nothing")
+	check(env.db.version == 2 and env.rec and next(env.rec.days) == nil, "login books nothing")
 	check(env.rec.session.startMoney == 1000000, "session starts with the login money")
 	env.pay(500)
 	check(env.today().income.other == 500, "first change after login is booked")
@@ -529,7 +535,7 @@ end
 do
 	local env = boot()
 	env.S.commands.gold("items")
-	check(env.printed[#env.printed] == "|cffc8794aSempre|r No vendor sales recorded.", "items without sales")
+	check(env.printed[#env.printed] == "|cffc8794aSempre|r No item bookings recorded.", "items without sales")
 	env.printed = {}
 	env.show("Merchant")
 	for id = 200, 211 do
@@ -543,8 +549,8 @@ do
 	env.S.commands.ledger("items")
 	local lines = {}
 	for _, line in ipairs(env.printed) do lines[#lines + 1] = line end
-	check(#lines == 11 and lines[1]:find("Top 10 vendor income"), "header plus ten lines")
-	check(lines[2]:find("Item211 x13") and lines[2]:find("10g 25s 32c"), "largest first, days within 30 added: " .. tostring(lines[2]))
+	check(#lines == 11 and lines[1]:find("Top 10 items of the last 30 days"), "header plus ten lines")
+	check(lines[2]:find("Item211 x13") and lines[2]:find("10g 25s 32c") and lines[2]:find("vendor %+10g 25s 32c"), "largest first, days within 30 added: " .. tostring(lines[2]))
 	check(not env.out():find("Item200 "), "item 200 (40 days ago and the smallest) is cut")
 	env.g.C_Item.GetItemInfo = function(id) return "Name" .. id end
 	env.printed = {}
@@ -594,5 +600,7 @@ do
 	env.fire("PLAYER_LOGOUT")
 	check(#env.errors == 0, "logout is harmless")
 end
+
+return bootShared
 
 end
