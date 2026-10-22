@@ -9,6 +9,7 @@ local ADDON_NAME = ...
 local CreateFrame, GetLocale, GetBuildInfo = CreateFrame, GetLocale, GetBuildInfo
 local UpdateAddOnMemoryUsage, GetAddOnMemoryUsage = UpdateAddOnMemoryUsage, GetAddOnMemoryUsage
 local C_AddOns = C_AddOns
+local next = next
 local pairs, ipairs, type, format, tostring, tonumber, select = pairs, ipairs, type, string.format, tostring, tonumber, select
 local collectgarbage, setmetatable = collectgarbage, setmetatable
 local UnitName, GetRealmName = UnitName, GetRealmName
@@ -29,7 +30,7 @@ local L = setmetatable({}, { __index = function(_, k) return k end })
 S.L = L
 if GetLocale() == "deDE" then
 	L.LOADED = "geladen. /sempre für Befehle."
-	L.HELP = "Befehle: |cffc8794a/sempre perf|r Speicher pro Modul, |cffc8794a/sempre fehler|r Fehlerliste, |cffc8794a/sempre version|r Version."
+	L.HELP = "Befehle: |cffc8794a/sempre optionen|r Einstellungen, |cffc8794a/sempre modul <Name> an|aus|r Modul schalten, |cffc8794a/sempre perf|r Speicher pro Modul, |cffc8794a/sempre fehler|r Fehlerliste, |cffc8794a/sempre version|r Version."
 	L.PERF_HEADER = "Speicher pro Modul (KB, Budget in Klammern):"
 	L.PERF_TOTAL = "Gesamt"
 	L.OVER_BUDGET = "über Budget"
@@ -46,7 +47,7 @@ if GetLocale() == "deDE" then
 	L.SECRET = "<geheim>"
 else
 	L.LOADED = "loaded. /sempre for commands."
-	L.HELP = "Commands: |cffc8794a/sempre perf|r memory per module, |cffc8794a/sempre errors|r error list, |cffc8794a/sempre version|r version."
+	L.HELP = "Commands: |cffc8794a/sempre options|r settings, |cffc8794a/sempre module <name> on|off|r switch a module, |cffc8794a/sempre perf|r memory per module, |cffc8794a/sempre errors|r error list, |cffc8794a/sempre version|r version."
 	L.PERF_HEADER = "Memory per module (KB, budget in brackets):"
 	L.PERF_TOTAL = "Total"
 	L.OVER_BUDGET = "over budget"
@@ -189,7 +190,7 @@ end
 local DB_VERSION = 1
 local defaults = {
 	version = DB_VERSION,
-	global = { errors = {} },
+	global = { errors = {}, options = {} },
 	chars = {},
 	profiles = {},
 }
@@ -203,6 +204,66 @@ local function applyDefaults(db, defs)
 			applyDefaults(db[k], v)
 		end
 	end
+end
+
+-- Options. Interface for modules (read-only, documented here):
+--   SempreUI:RegisterOptions(moduleName, list) -- call from the module's own
+--       ADDON_LOADED. list = { { key = "x", default = true,
+--       label = { de = "...", en = "..." }, tooltip = { de = "...", en = "..." } } }
+--       (tooltip optional; checkboxes only). Registering again replaces the list.
+--   SempreUI:GetOption(moduleName, key)        -- stored value or the default
+--   SempreUI:SetOption(moduleName, key, value) -- stores, sends OPTION_CHANGED
+-- Values live in SempreDB.global.options[moduleName][key], only when they
+-- differ from the default. Messages: OPTION_CHANGED(moduleName, key, value) and
+-- OPTIONS_REGISTERED(moduleName), sent after a module registered its list.
+
+local optionLists, optionDefs = {}, {}
+
+function S:RegisterOptions(moduleName, list)
+	local defs = {}
+	for _, opt in ipairs(list) do defs[opt.key] = opt end
+	optionLists[moduleName], optionDefs[moduleName] = list, defs
+	self:Send("OPTIONS_REGISTERED", moduleName)
+end
+
+-- The registered list of a module, or nil. Do not modify it.
+function S:GetOptionList(moduleName)
+	return optionLists[moduleName]
+end
+
+function S:GetOption(moduleName, key)
+	local options = S.db and S.db.global.options
+	local mod = options and options[moduleName]
+	local value = mod and mod[key]
+	if value ~= nil then return value end
+	local def = optionDefs[moduleName] and optionDefs[moduleName][key]
+	return def and def.default
+end
+
+-- Returns false for an unknown option or before the saved data exists. The
+-- message is sent only when the value actually changed.
+function S:SetOption(moduleName, key, value)
+	local def = optionDefs[moduleName] and optionDefs[moduleName][key]
+	local global = S.db and S.db.global
+	if not (def and global) then return false end
+	value = value and true or false
+	local old = S:GetOption(moduleName, key)
+	if type(global.options) ~= "table" then global.options = {} end
+	local mod = global.options[moduleName]
+	if value == def.default then
+		if mod then
+			mod[key] = nil
+			if next(mod) == nil then global.options[moduleName] = nil end
+		end
+	else
+		if not mod then
+			mod = {}
+			global.options[moduleName] = mod
+		end
+		mod[key] = value
+	end
+	if old ~= value then S:Send("OPTION_CHANGED", moduleName, key, value) end
+	return true
 end
 
 -- Modules: addon folders named Sempre_<Name> that mark themselves with
@@ -260,6 +321,8 @@ local function isEnabled(name, char)
 	if type(state) ~= "number" then return state ~= false end
 	return state > 0
 end
+
+S.IsModuleEnabled = isEnabled
 
 -- Modules with "## X-Sempre-LoadWith: Login" load right after login, in
 -- alphabetical order, if the player has not switched them off.
@@ -488,6 +551,13 @@ S:On("ADDON_LOADED", function(_, name)
 	applyDefaults(SempreDB, defaults)
 	S.db = SempreDB
 	attachErrorStore(SempreDB)
+	S:RegisterOptions(ADDON_NAME, {
+		{
+			key = "login_message", default = true,
+			label = { de = "Begrüßung im Chat beim Login", en = "Login message in chat" },
+			tooltip = { de = "Zeigt beim Login die Zeile mit der Version.", en = "Shows the line with the version at login." },
+		},
+	})
 end)
 
 S:On("PLAYER_LOGIN", function()
@@ -496,5 +566,5 @@ S:On("PLAYER_LOGIN", function()
 	S.db.chars[S.charKey] = S.db.chars[S.charKey] or {}
 	S.char = S.db.chars[S.charKey]
 	loadLoginModules()
-	S:Print("%s %s", S.version, L.LOADED)
+	if S:GetOption(ADDON_NAME, "login_message") then S:Print("%s %s", S.version, L.LOADED) end
 end)
