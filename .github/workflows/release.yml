@@ -9,7 +9,7 @@ name: Release
 on:
   push:
     branches: [main]
-    paths: [CHANGELOG.md]
+    paths: [CHANGELOG.md, .github/workflows/release.yml]
     tags: ['v*']
 
 permissions:
@@ -30,17 +30,21 @@ jobs:
       - name: Tag the new changelog version
         if: github.ref_type == 'branch'
         id: tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version=$(grep -m1 -oE '^## v[0-9A-Za-z.+-]+' CHANGELOG.md | cut -c4-)
-          if [ -z "$version" ] || git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
-            echo "No new version in CHANGELOG.md."
+          if [ -z "$version" ] || gh release view "$version" >/dev/null 2>&1; then
+            echo "No unreleased version in CHANGELOG.md."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git config user.name SempreUI
-          git config user.email SempreUI@users.noreply.github.com
-          git tag -a "$version" -m "SempreUI $version"
-          git push origin "$version"
+          if ! git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
+            git config user.name SempreUI
+            git config user.email SempreUI@users.noreply.github.com
+            git tag -a "$version" -m "SempreUI $version"
+            git push origin "$version"
+          fi
           git checkout -q "$version"
 
       - if: steps.tag.outputs.skip != 'true'
@@ -48,6 +52,11 @@ jobs:
       - if: steps.tag.outputs.skip != 'true'
         run: lua5.1 tests/run.lua
 
+      # The BigWigs packager. Run without GITHUB_ACTIONS, because on a branch
+      # push it would otherwise wait for a separate run for the new tag, and
+      # a tag pushed with the workflow token starts no new run.
       - name: Package and upload
         if: steps.tag.outputs.skip != 'true'
-        uses: BigWigsMods/packager@v2
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/release.sh" https://raw.githubusercontent.com/BigWigsMods/packager/v2/release.sh
+          env -u GITHUB_ACTIONS bash "$RUNNER_TEMP/release.sh"
