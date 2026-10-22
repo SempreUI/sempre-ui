@@ -8,6 +8,7 @@ globals = {
 	"SempreUI",
 	"SempreDB",
 	"SempreButtonsDB",
+	"SempreButlerDB",
 	"SempreItemsDB",
 	"SempreLedgerDB",
 	"SempreLootDB",
@@ -105,5 +106,13 @@ read_globals = {
 	"GetCursorPosition",
 	"C_Timer",
 	"STANDARD_TEXT_FONT",
+	"CanMerchantRepair",
+	"GetRepairAllCost",
+	"CanGuildBankRepair",
+	"GetGuildBankWithdrawMoney",
+	"AcceptResurrect",
+	"CancelDuel",
+	"IsInInstance",
+	"UIErrorsFrame",
 }
 
