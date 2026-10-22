@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: |cffc8794aSempre|r Way
+## Notes: Waypoints. /way adds a point, the game's own marker shows it in the world and on the minimap, pins on the world map, and the next point follows on arrival.
+## Notes-deDE: Wegpunkte. /way setzt einen Punkt, die Markierung des Spiels zeigt ihn in der Welt und auf der Minikarte, Pins auf der Weltkarte, und bei Ankunft folgt der nächste Punkt.
+## Author: SempreUI
+## IconTexture: Interface\AddOns\Sempre\Media\Icon
+## Version: @project-version@
+## Dependencies: Sempre
+## LoadOnDemand: 1
+## SavedVariables: SempreWayDB
+## X-Sempre-Module: 1
+## X-Sempre-Budget-KB: 60
+## X-Sempre-LoadWith: Login
+## X-License: GPL-3.0-only
+
+Way.lua
