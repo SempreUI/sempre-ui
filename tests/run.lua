@@ -404,9 +404,10 @@ do
 	check(called and #env.printed == 0 and #env.S.db.global.errors == 0, "missing seterrorhandler leaves the feature off silently")
 end
 
-dofile("tests/items.lua")(check, same)
+local bootItems = dofile("tests/items.lua")(check, same)
 dofile("tests/ledger.lua")(check)
-dofile("tests/loot.lua")(check)
+local bootLoot = dofile("tests/loot.lua")(check)
+dofile("tests/settings.lua")(check, same, { items = bootItems, loot = bootLoot })
 
 print(string.format("%d checks, %d failed", count, failures))
 os.exit(failures == 0 and 0 or 1)

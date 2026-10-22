@@ -725,4 +725,6 @@ do
 	check(env.Loot.GetNode(1) == nil, "unknown node is nil")
 end
 
+return boot
+
 end

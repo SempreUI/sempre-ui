@@ -444,4 +444,6 @@ do
 	check(pkg:find("SempreUI/Sempre_Items: Sempre_Items", 1, true), ".pkgmeta has the move-folders line")
 end
 
+return boot
+
 end
