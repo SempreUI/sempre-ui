@@ -106,6 +106,7 @@ local function boot(opts)
 			env.askedAt = { id, x, y }
 			return env.atPos
 		end,
+		GetMapArtLayers = function() return env.layers end,
 		GetBestMapForUnit = function() return env.playerMap end,
 		GetPlayerMapPosition = function(map)
 			if map ~= env.playerMap or not env.px then return nil end
@@ -420,13 +421,40 @@ do
 	local t1 = tiles[1]
 	check(t1.texture == 201 and t1.desaturated == true and t1.alpha == 0.6, "map: drawn desaturated at 60 percent alpha")
 	check(t1.w == 256 and t1.h == 256 and t1.coord[2] == 1 and t1.coord[4] == 1, "map: full tile")
-	check(tiles[3].w == 88 and tiles[3].h == 256 and near(tiles[3].coord[2], 88 / 256) and tiles[3].coord[4] == 1, "map: last column is 88 wide")
-	check(tiles[4].w == 256 and tiles[4].h == 44 and tiles[4].coord[2] == 1 and near(tiles[4].coord[4], 44 / 256), "map: last row is 44 high")
+	check(tiles[3].w == 88 and tiles[3].h == 256 and near(tiles[3].coord[2], 88 / 128) and tiles[3].coord[4] == 1, "map: last column is 88 wide in a 128 file")
+	check(tiles[4].w == 256 and tiles[4].h == 44 and tiles[4].coord[2] == 1 and near(tiles[4].coord[4], 44 / 64), "map: last row is 44 high in a 64 file")
 	check(tiles[6].w == 88 and tiles[6].h == 44 and tiles[6].texture == 206, "map: corner tile is 88 by 44")
 	local p = tiles[5].points[#tiles[5].points]
 	check(p[1] == "TOPLEFT" and p[2] == env.Map.ui.overlay and near(p[4], 300 + 256) and near(p[5], -(40 + 256)), "map: tile offset in the grid")
 	check(tiles[7].texture == 777 and tiles[7].layer == "ARTWORK" and tiles[1].layer == "BACKGROUND", "map: top overlays go on a higher layer")
 	check(env.Map.ui.overlay.parent == env.canvas and env.Map.ui.overlay.level == env.canvas.level, "map: overlay frame sits on the canvas at its level, below pins")
+
+	-- Offsets are canvas units, never scaled by the canvas size.
+	env.canvas.GetWidth = function() return 3000 end
+	env.canvas.GetHeight = function() return 2000 end
+	env.explored[ZONE] = { a }
+	env.changeTo(ZONE)
+	tiles = shownTiles(env)
+	p = tiles[5].points[#tiles[5].points]
+	check(tiles[5].w == 256 and near(p[4], 556) and near(p[5], -296), "map: offsets and sizes are used unscaled")
+
+	-- Tile size from the first art layer; a layer-less client falls back to 256.
+	env.layers = { { tileWidth = 512, tileHeight = 128 }, { tileWidth = 64, tileHeight = 64 } }
+	env.changeTo(ZONE)
+	tiles = shownTiles(env)
+	check(#tiles == 7 and tiles[1].w == 512 and tiles[1].h == 128 and tiles[2].w == 88 and tiles[2].coord[2] == 88 / 128, "map: tile size from the first art layer")
+	env.layers = nil
+	env.changeTo(ZONE)
+	check(shownTiles(env)[1].w == 256, "map: no art layers, tiles of 256")
+
+	-- Only the first art layer is drawn.
+	env.Map.ui.container.GetCurrentLayerIndex = function() return 2 end
+	env.changeTo(ZONE)
+	check(#shownTiles(env) == 0, "map: a zoomed art layer draws nothing")
+	env.Map.ui.container.GetCurrentLayerIndex = function() return 1 end
+	env.changeTo(ZONE)
+	check(#shownTiles(env) == 7, "map: the first art layer draws")
+	env.Map.ui.container.GetCurrentLayerIndex = nil
 
 	-- Moving to a map where nothing is stored hides the overlays.
 	env.changeTo(OTHER_ZONE)
@@ -442,6 +470,10 @@ do
 	check(#ts == 6 and ts[3].w == 88 and ts[6].h == 44 and ts[4].row == 256 and ts[2].col == 256, "map: tile sizes for 600 by 300")
 	ts = env.Map.Tiles({ w = 600, h = 300, ids = { 1, 2 } })
 	check(#ts == 2, "map: missing file data IDs are skipped")
+	ts = env.Map.Tiles({ w = 512, h = 256, ids = { 1, 2 } })
+	check(ts[2].w == 256 and ts[2].fw == 256 and ts[2].h == 256, "map: an exact multiple ends in a full tile")
+	ts = env.Map.Tiles({ w = 10, h = 20, ids = { 1 } })
+	check(ts[1].fw == 16 and ts[1].fh == 32, "map: small file sizes start at 16")
 end
 
 do
