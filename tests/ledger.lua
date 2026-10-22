@@ -15,7 +15,7 @@ local SECRET = {}
 
 -- opts: db (preset SempreLedgerDB), itemsDB (SempreItemsDB), money, now, early
 -- (module loads before PLAYER_LOGIN), noInteraction (classic events only),
--- noHooks (no hooksecurefunc), unknown (event -> true)
+-- noHooks (no hooksecurefunc), noInvoice (no GetInboxInvoiceInfo), unknown (event -> true)
 local function boot(opts)
 	opts = opts or {}
 	local env = { frames = {}, printed = {}, errors = {}, money = opts.money or 1000000, now = opts.now or T0, clock = 100 }
@@ -53,8 +53,16 @@ local function boot(opts)
 	env.requested = {}
 	env.bag = {} -- "bag:slot" -> info
 	env.buyback = {} -- index -> { link, qty }
+	env.nameLinks = {} -- item name -> item ID, answered by GetItemInfo(name)
+	env.instant = {} -- item name -> item ID, answered by GetItemInfoInstant(name)
 	g.C_Item = {
+		GetItemInfoInstant = function(name) return env.instant[name] end,
 		GetItemInfo = function(id)
+			if type(id) == "string" then
+				local found = env.nameLinks[id]
+				if found then return id, "|cffffffff|Hitem:" .. found .. "::::|h[" .. id .. "]|h|r" end
+				return nil
+			end
 			local price = env.prices[id]
 			if price then return "Item" .. id, "link", 1, 1, 1, "", "", 20, "", 0, price end
 		end,
@@ -78,8 +86,21 @@ local function boot(opts)
 	env.inbox = {} -- index -> { sender, money }
 	g.GetInboxHeaderInfo = function(i)
 		local m = env.inbox[i]
-		return nil, nil, m.sender, "subject", m.money
+		return nil, nil, m.sender, m.subject or "subject", m.money
 	end
+	g.GetInboxNumItems = function() return #env.inbox end
+	-- invoice = { type, name, buyer, bid, buyout, deposit, cut, delay, a, b, count }
+	g.GetInboxInvoiceInfo = function(i)
+		local inv = env.inbox[i] and env.inbox[i].invoice
+		if inv then return unpack(inv, 1, 11) end
+	end
+	if opts.noInvoice then g.GetInboxInvoiceInfo = nil end
+	g.AUCTION_SOLD_MAIL_SUBJECT = "Auction successful: %s"
+	g.AUCTION_OUTBID_MAIL_SUBJECT = "Outbid on %s"
+	g.AUCTION_EXPIRED_MAIL_SUBJECT = "Auction expired: %s"
+	g.AUCTION_CANCELLED_MAIL_SUBJECT = "Auction cancelled: %s"
+	g.AUCTION_REMOVED_MAIL_SUBJECT = "Auction removed: %s"
+	g.AUCTION_WON_MAIL_SUBJECT = "Auction won: %s"
 	if not opts.noHooks then
 		g.hooksecurefunc = function(a, b, c)
 			local tbl, name, fn = g, a, b
