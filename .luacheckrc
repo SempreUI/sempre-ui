@@ -73,5 +73,9 @@ read_globals = {
 	"UnitClassification",
 	"IsShiftKeyDown",
 	"C_Map",
+	"Settings",
+	"ReloadUI",
+	"CreateSettingsListSectionHeaderInitializer",
+	"CreateSettingsButtonInitializer",
 }
 

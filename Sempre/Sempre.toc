@@ -12,3 +12,4 @@
 ## X-Wago-ID: nGv9xvKx
 
 Core.lua
+Settings.lua
