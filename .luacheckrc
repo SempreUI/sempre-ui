@@ -12,6 +12,7 @@ globals = {
 	"SempreItemsDB",
 	"SempreLedgerDB",
 	"SempreLootDB",
+	"SempreMapDB",
 	"SempreWayDB",
 	"SLASH_SEMPRE1",
 	"SLASH_SEMPREWAY1",
@@ -114,5 +115,6 @@ read_globals = {
 	"CancelDuel",
 	"IsInInstance",
 	"UIErrorsFrame",
+	"C_MapExplorationInfo",
 }
 

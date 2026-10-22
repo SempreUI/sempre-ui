@@ -10,6 +10,7 @@ move-folders:
   SempreUI/Sempre_Items: Sempre_Items
   SempreUI/Sempre_Ledger: Sempre_Ledger
   SempreUI/Sempre_Loot: Sempre_Loot
+  SempreUI/Sempre_Map: Sempre_Map
   SempreUI/Sempre_Mail: Sempre_Mail
   SempreUI/Sempre_Way: Sempre_Way
 
