@@ -415,6 +415,7 @@ dofile("tests/map.lua")(check)
 dofile("tests/buttons.lua")(check)
 dofile("tests/butler.lua")(check)
 dofile("tests/rares.lua")(check)
+dofile("tests/whisper.lua")(check)
 dofile("tests/news.lua")(check)
 dofile("tests/settings.lua")(check, same, { items = bootItems, loot = bootLoot })
 
