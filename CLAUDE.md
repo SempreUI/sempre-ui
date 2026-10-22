@@ -36,7 +36,8 @@ Mainline 12.x, TOC `## Interface: 16001`). TOC files carry no client suffix
    relevant Blizzard API docs and, if useful, other addons' code. Writes
    `docs/briefings/<module>.md`: behaviour, data layout, events, edge cases,
    Forever restrictions, acceptance checks. No code lines, no identifiers or
-   structure copied from other addons.
+   structure copied from other addons. Check every `C_` function and event
+   against `tools/api-forever.txt` (see `docs/solutions/forever-api-names.md`).
 2. **Build** (separate session or agent that never sees foreign code): gets
    only the briefing, this file and the repo. Writes the code and tests.
 3. **Review** (separate session): checks the result against the briefing,
