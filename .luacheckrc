@@ -77,5 +77,14 @@ read_globals = {
 	"ReloadUI",
 	"CreateSettingsListSectionHeaderInitializer",
 	"CreateSettingsButtonInitializer",
+	"TakeInboxItem",
+	"MailFrame",
+	"UIParent",
+	"AUCTION_SOLD_MAIL_SUBJECT",
+	"AUCTION_EXPIRED_MAIL_SUBJECT",
+	"AUCTION_OUTBID_MAIL_SUBJECT",
+	"AUCTION_REMOVED_MAIL_SUBJECT",
+	"AUCTION_CANCELLED_MAIL_SUBJECT",
+	"AUCTION_WON_MAIL_SUBJECT",
 }
 
