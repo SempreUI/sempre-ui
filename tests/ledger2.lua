@@ -143,4 +143,158 @@ do
 	check(env.printed[#env.printed]:find("No auction house sales recorded"), "ah list without sales")
 end
 
+-- Auction mail
+
+-- Mail with a sale invoice: type, item, buyer, bid, buyout, deposit, cut, delay, 0, 0, count.
+local function saleMail(name, gross, cut, deposit, count)
+	return {
+		sender = "Auction House", subject = "Auction successful: " .. name, money = gross - cut + deposit,
+		invoice = { "seller", name, "BuyerSecretName", gross, gross, deposit, cut, 0, 0, 0, count },
+	}
+end
+
+-- Walks a deep copy-free search for a string anywhere in a table.
+local function contains(t, needle, seen)
+	seen = seen or {}
+	if seen[t] then return false end
+	seen[t] = true
+	for k, v in pairs(t) do
+		if k == needle or v == needle then return true end
+		if type(v) == "string" and v:find(needle, 1, true) then return true end
+		if type(k) == "string" and k:find(needle, 1, true) then return true end
+		if type(v) == "table" and contains(v, needle, seen) then return true end
+	end
+	return false
+end
+
+do
+	local env = boot()
+	env.nameLinks.Item101 = 101
+	env.inbox[1] = saleMail("Item101", 10000, 500, 200, 2)
+	env.show("MailInfo")
+	-- The mail is gone from the inbox once the money is taken; the invoice was read before.
+	local mail = env.inbox[1]
+	env.inbox[1] = { sender = "Auction House", subject = "Auction successful: Item101", money = 0 }
+	env.g.TakeInboxMoney(1)
+	env.pay(9700)
+	local day = env.today()
+	check(day.income.auction == 9700 and not day.income.mail, "sale money is booked as auction, not mail")
+	local e = day.auctionItems and day.auctionItems[101]
+	check(e and e.count == 2 and e.gross == 10000 and e.cut == 500 and e.deposit == 200 and e.net == 9700,
+		"sale: count, gross, cut, deposit and net per item")
+	check(env.changes[#env.changes] == "Tester-Realm:auction", "LEDGER_CHANGED says auction")
+
+	-- A second sale of the same item adds up; the mailbox stays open.
+	env.inbox[1] = saleMail("Item101", 3000, 150, 50, 1)
+	env.fire("MAIL_INBOX_UPDATE")
+	mail = env.inbox[1]
+	env.g.TakeInboxMoney(1)
+	env.pay(mail.money)
+	check(e.count == 3 and e.gross == 13000 and e.cut == 650 and e.net == 12600, "sales of one item add up")
+	check(env.Ledger.GetItem("Tester-Realm", 101, 1).auction == 12350, "interface: auction net is gross minus cut")
+	check(not contains(env.db, "BuyerSecretName"), "the buyer name is stored nowhere")
+	check(env.Ledger.GetRange("Tester-Realm", 1).income.auction == 12600, "the booking counts as income")
+
+	-- A plain mail from a stranger is still mail.
+	env.inbox[1] = { sender = "Stranger", money = 400 }
+	env.fire("MAIL_INBOX_UPDATE")
+	env.g.TakeInboxMoney(1)
+	env.pay(400)
+	check(day.income.mail == 400, "plain mail money stays mail")
+	check(#env.errors == 0, "no handler errors")
+	check(mail ~= nil, "fixture used")
+end
+
+do
+	-- Item resolved through the other ways.
+	local env = boot()
+	env.instant.Instant = 300
+	env.inbox[1] = saleMail("Instant", 1000, 50, 10, 1)
+	env.show("MailInfo")
+	env.g.TakeInboxMoney(1)
+	env.pay(960)
+	check(env.today().auctionItems[300] and env.today().auctionItems[300].gross == 1000, "name resolved by GetItemInfoInstant")
+
+	-- The player's own mail through the Items interface.
+	local env2 = boot()
+	env2.S.Items = {
+		GetMail = function() return { { items = { 555, 1 } } }, 0, 1, 1 end,
+		GetName = function(id) return id == 555 and "FromMail" or nil end,
+	}
+	env2.inbox[1] = saleMail("FromMail", 1000, 50, 0, 1)
+	env2.show("MailInfo")
+	env2.g.TakeInboxMoney(1)
+	env2.pay(950)
+	check(env2.today().auctionItems[555], "name resolved through SempreUI.Items mail items")
+end
+
+do
+	-- Unresolved name is stored under the name.
+	local env = boot()
+	env.inbox[1] = saleMail("Unknown Thing", 800, 40, 0, 1)
+	env.show("MailInfo")
+	env.g.TakeInboxMoney(1)
+	env.pay(760)
+	local e = env.today().auctionItems["Unknown Thing"]
+	check(e and e.count == 1 and e.gross == 800 and e.net == 760, "unresolved item is stored by name")
+	check(env.today().income.auction == 760, "and the money is auction income")
+end
+
+do
+	-- Other auction mail is auction money, never a sale.
+	local env = boot()
+	env.inbox[1] = { sender = "Auction House", subject = "Outbid on Thing", money = 300 }
+	env.inbox[2] = { sender = "Auction House", subject = "Auction cancelled: Thing", money = 40 }
+	env.inbox[3] = { sender = "Auction House", subject = "Auction expired: Thing", money = 5 }
+	env.inbox[4] = { sender = "Auction House", subject = "Auction won: Thing", money = 0, invoice = { "buyer", "Thing", "SellerX", 100, 100, 0, 0 } }
+	env.inbox[5] = { sender = "Auction House", subject = "Something", money = 70, invoice = { "buyer", "Thing", "SellerX", 100, 100, 0, 0 } }
+	env.show("MailInfo")
+	for i = 1, 5 do
+		env.g.TakeInboxMoney(i)
+		env.pay(env.inbox[i].money)
+	end
+	check(env.today().income.auction == 415 and not env.today().income.mail, "outbid, cancelled, expired and buyer invoices are auction money")
+	check(env.today().auctionItems == nil, "none of them is a sale")
+	check(env.Ledger.GetItem("Tester-Realm", 100, 1).auction == 0, "no sale in the item sums")
+end
+
+do
+	-- Malformed invoices fall back to a plain auction booking.
+	local bad = {
+		{ "seller" },
+		{ "seller", "Item101", "B", "x", 10, 0, 1 },
+		{ "seller", "", "B", 1000, 1000, 0, 50 },
+		{ "seller", "Item101", "B", 1000, 1000, 0, 50, 0, 0, 0, "n" },
+		{ "seller", "Item101", "B", -5, 0, 0, 0 },
+		{ "seller", 42, "B", 1000, 1000, 0, 50 },
+		{ "seller", "Item101", "B", 1000, 1000, 0, 60 }, -- money does not fit
+	}
+	for i, inv in ipairs(bad) do
+		local env = boot()
+		env.nameLinks.Item101 = 101
+		env.inbox[1] = { sender = "Auction House", subject = "Auction successful: Item101", money = 950, invoice = inv }
+		env.show("MailInfo")
+		env.g.TakeInboxMoney(1)
+		env.pay(950)
+		local ok = env.today().income.auction == 950 and env.today().auctionItems == nil and #env.errors == 0
+		if i == 4 then ok = env.today().income.auction == 950 and #env.errors == 0 end
+		check(ok, "malformed invoice " .. i .. " is booked as plain auction money")
+	end
+	-- A count that is no number falls back to one only when everything else fits.
+	local env = boot()
+	env.inbox[1] = { sender = "A", subject = "x", money = 950, invoice = { "seller", "Z", "B", 1000, 1000, 0, 50, 0, 0, 0, "n" } }
+	env.show("MailInfo")
+	env.g.TakeInboxMoney(1)
+	env.pay(950)
+	check(env.today().auctionItems.Z.count == 1, "a missing count is one")
+
+	-- No invoice function at all: the subject still makes it auction money.
+	local plain = boot({ noInvoice = true })
+	plain.inbox[1] = { sender = "A", subject = "Auction successful: Item101", money = 500 }
+	plain.show("MailInfo")
+	plain.g.TakeInboxMoney(1)
+	plain.pay(500)
+	check(plain.today().income.auction == 500 and plain.today().auctionItems == nil, "without invoices a sold-subject mail is plain auction money")
+end
+
 end

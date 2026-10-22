@@ -42,6 +42,7 @@ local pairs, ipairs, type, format, tonumber, floor, abs, select = pairs, ipairs,
 local time, date, sort, concat, max = time, date, table.sort, table.concat, math.max
 local issecretvalue = issecretvalue
 local C_Container, C_Item, C_EventUtils, C_Merchant, C_Mail = C_Container, C_Item, C_EventUtils, C_Merchant, C_Mail
+local GetInboxNumItems, GetInboxInvoiceInfo = GetInboxNumItems, GetInboxInvoiceInfo
 local GetMoney, GetTime, GetRealmName, GetLocale = GetMoney, GetTime, GetRealmName, GetLocale
 local GetInboxHeaderInfo, hooksecurefunc = GetInboxHeaderInfo, hooksecurefunc
 local GetMerchantItemLink, GetMerchantItemInfo = GetMerchantItemLink, GetMerchantItemInfo
@@ -166,6 +167,10 @@ local incoming = {} -- money in mails from own characters that is being taken: {
 local visitSales = {} -- sales of the current merchant visit, newest last
 local pendingSales = {} -- itemID -> sales waiting for the item's sell price
 local pendingSpend = {} -- purchases and deposits waiting for their money change
+local mailInfo = {} -- inbox index -> auction mail read when the mailbox showed it
+local incomingAuction = {} -- auction mail money that is being taken: { amount, time, info }
+local seenNames = {} -- item name -> item ID, for items this session has handled
+local seenCount = 0
 
 -- A value the addon must not compute with is dropped.
 local function clean(v)
@@ -304,6 +309,7 @@ local function takeIncoming(diff, now)
 end
 
 local takeSpend, settleSpend -- see "Purchases"
+local scanInbox, takeAuctionMail -- see "Auction mail"
 
 local function onMoney()
 	if not started then return end
@@ -327,6 +333,7 @@ local function onMoney()
 		if diff > 0 then
 			local moved, rest = takeIncoming(diff, now)
 			if moved > 0 then book("transfer", moved) end
+			if rest > 0 then rest = takeAuctionMail(rest, now) end
 			if rest == 0 then return end
 			diff = rest
 		end
@@ -361,6 +368,8 @@ local function setOpen(flag, value)
 	if open[flag] == value then return end
 	open[flag] = value
 	if flag == "merchant" and value then visitSales = {} end
+	-- The invoices are read now: a mail may be gone once its money is taken.
+	if flag == "mail" and value and scanInbox then scanInbox() end
 	if not value then closedAt[flag] = GetTime() end
 end
 
@@ -527,6 +536,177 @@ function settleSpend(entry, copper)
 	end
 end
 
+-- Auction mail. The invoice is read when the mailbox shows the mail. Assumed
+-- return order of GetInboxInvoiceInfo: type ("seller" for a sale), item name,
+-- buyer name, bid, buyout, deposit, cut, delay, then two more values, then the
+-- count. The buyer is never kept. If the values do not fit, or the money of
+-- the mail is not bid (or buyout) minus cut plus deposit, the mail is booked
+-- as plain auction money without item details.
+
+local subjectPatterns
+
+local function toPattern(fmt)
+	if type(fmt) ~= "string" then return nil end
+	local p = fmt:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1"):gsub("%%%%s", "(.+)")
+	return "^" .. p .. "$"
+end
+
+local function buildPatterns()
+	subjectPatterns = {}
+	local function add(kind, fmt)
+		local p = toPattern(fmt)
+		if p then subjectPatterns[#subjectPatterns + 1] = { kind, p } end
+	end
+	add("sale", AUCTION_SOLD_MAIL_SUBJECT)
+	add("refund", AUCTION_OUTBID_MAIL_SUBJECT)
+	add("auction", AUCTION_EXPIRED_MAIL_SUBJECT)
+	add("auction", AUCTION_REMOVED_MAIL_SUBJECT)
+	add("auction", AUCTION_CANCELLED_MAIL_SUBJECT)
+	add("auction", AUCTION_WON_MAIL_SUBJECT)
+end
+
+-- Kind of an auction mail by its subject, and the item name it carries.
+local function subjectKind(subject)
+	if type(subject) ~= "string" then return nil end
+	if not subjectPatterns then buildPatterns() end
+	for _, def in ipairs(subjectPatterns) do
+		local name = subject:match(def[2])
+		if name then return def[1], name end
+	end
+	return nil
+end
+
+-- Assumptions: C_Item.GetItemInfoInstant(name) returns the item ID first and
+-- C_Item.GetItemInfo(name) the link second; both answer for a name only when
+-- the client knows the item.
+local function resolveItem(name)
+	if seenNames[name] then return seenNames[name] end
+	if C_Item and C_Item.GetItemInfoInstant then
+		local id = clean((C_Item.GetItemInfoInstant(name)))
+		if type(id) == "number" and id > 0 then return id end
+	end
+	if C_Item and C_Item.GetItemInfo then
+		local link = clean((select(2, C_Item.GetItemInfo(name))))
+		local id = type(link) == "string" and tonumber(link:match("item:(%d+)"))
+		if id and id > 0 then return id end
+	end
+	-- The items of the character's mail, through the read-only Items interface.
+	local items = S.Items
+	if items and items.GetMail and items.GetName then
+		for _, mail in ipairs(items.GetMail(charKey)) do
+			local list = mail.items
+			for i = 1, type(list) == "table" and #list or 0, 2 do
+				if items.GetName(list[i]) == name then return list[i] end
+			end
+		end
+	end
+	return nil
+end
+
+local function isNumber(v, min)
+	return type(v) == "number" and v >= min
+end
+
+-- Reads one inbox mail. Returns nil for mail that is not auction money.
+local function readMail(index)
+	if not GetInboxHeaderInfo then return nil end
+	local _, _, _, subject, money = GetInboxHeaderInfo(index)
+	money, subject = clean(money), clean(subject)
+	if not isNumber(money, 1) then return nil end
+	local info
+	if GetInboxInvoiceInfo then
+		local invType, name, _, bid, buyout, deposit, cut, _, _, _, count = GetInboxInvoiceInfo(index)
+		invType, name, bid, buyout, deposit, cut, count = clean(invType), clean(name), clean(bid), clean(buyout), clean(deposit), clean(cut), clean(count)
+		if invType == "seller" then
+			info = { kind = "sale", money = money }
+			if type(name) == "string" and name ~= "" and isNumber(bid, 0) and isNumber(buyout, 0)
+				and isNumber(deposit, 0) and isNumber(cut, 0) then
+				local gross = bid > 0 and bid or buyout
+				if gross > 0 and gross - cut + deposit == money then
+					info.invoice = {
+						name = name, gross = gross, cut = cut, deposit = deposit,
+						count = isNumber(count, 1) and floor(count) or 1,
+					}
+				end
+			end
+		elseif invType ~= nil then
+			info = { kind = "auction", money = money }
+		end
+	end
+	if not info then
+		local kind, name = subjectKind(subject)
+		if not kind then return nil end
+		info = { kind = kind, money = money, name = name }
+	end
+	return info
+end
+
+function scanInbox()
+	mailInfo = {}
+	if not GetInboxNumItems then return end
+	local shown = clean((GetInboxNumItems()))
+	for i = 1, isNumber(shown, 1) and shown or 0 do
+		mailInfo[i] = readMail(i)
+	end
+end
+
+local function cancelBid(info, amount)
+	local bids = rec.bids
+	if type(bids) ~= "table" then return end
+	local id = info.name and resolveItem(info.name)
+	for i = #bids, 1, -1 do
+		local b = bids[i]
+		if b.copper == amount and ((id and b.id == id) or (info.name and b.name == info.name)) then
+			table.remove(bids, i)
+			local e = rec.days[b.day] and rec.days[b.day].purchases and rec.days[b.day].purchases[b.id]
+			if e then
+				e.count, e.copper = e.count - b.count, e.copper - b.copper
+				if e.count <= 0 and e.copper <= 0 then rec.days[b.day].purchases[b.id] = nil end
+			end
+			itemChanged(b.id)
+			return
+		end
+	end
+end
+
+local function recordAuctionSale(inv)
+	local id = resolveItem(inv.name)
+	local items = daySub(dayKey(0), "auctionItems")
+	local k = id or inv.name
+	local e = items[k]
+	if not e then
+		e = { count = 0, gross = 0, cut = 0, deposit = 0, net = 0 }
+		items[k] = e
+	end
+	e.count, e.gross, e.cut = e.count + inv.count, e.gross + inv.gross, e.cut + inv.cut
+	e.deposit, e.net = e.deposit + inv.deposit, e.net + inv.gross - inv.cut + inv.deposit
+	itemChanged(k)
+end
+
+-- Books the auction mail money that matches taken mails. Returns what is left.
+function takeAuctionMail(rest, now)
+	local i = 1
+	while i <= #incomingAuction do
+		local entry = incomingAuction[i]
+		if now - entry.time > TRANSFER_WINDOW then
+			table.remove(incomingAuction, i)
+		elseif entry.amount <= rest then
+			rest = rest - entry.amount
+			table.remove(incomingAuction, i)
+			book("auction", entry.amount)
+			local info = entry.info
+			if info.kind == "sale" and info.invoice then
+				recordAuctionSale(info.invoice)
+			elseif info.kind == "refund" then
+				cancelBid(info, entry.amount)
+			end
+		else
+			i = i + 1
+		end
+	end
+	return rest
+end
+
 -- Hooks. All after the original call, all installed from ADDON_LOADED, all
 -- feature-detected: the first argument is the function that must exist.
 
@@ -596,7 +776,10 @@ local function onTakeMailMoney(index)
 	money = clean(money)
 	if type(money) == "number" and money > 0 and isOwn(sender) then
 		incoming[#incoming + 1] = { amount = money, time = GetTime() }
+		return
 	end
+	local info = mailInfo[index] or readMail(index)
+	if info then incomingAuction[#incomingAuction + 1] = { amount = info.money, time = GetTime(), info = info } end
 end
 
 local function installHooks()
@@ -634,6 +817,7 @@ local function registerEvents()
 	end
 	onOptional("QUEST_TURNED_IN", function() lastQuest = GetTime() end)
 	onOptional("ITEM_DATA_LOAD_RESULT", onItemData)
+	onOptional("MAIL_INBOX_UPDATE", function() if open.mail then scanInbox() end end)
 	-- Login and reload read the baseline again, never a booking.
 	S:On("PLAYER_ENTERING_WORLD", function(_, isLogin, isReload)
 		if started and (isLogin or isReload) then
