@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: |cffc8794aSempre|r Mail
+## Notes: Mail overview. Every letter at a glance at the mailbox, take all with one click, and a warning before mail expires on any character.
+## Notes-deDE: Postübersicht. Jeder Brief auf einen Blick am Briefkasten, alles nehmen mit einem Klick und eine Warnung, bevor Post bei einem Charakter abläuft.
+## Author: SempreUI
+## IconTexture: Interface\AddOns\Sempre\Media\Icon
+## Version: @project-version@
+## Dependencies: Sempre
+## LoadOnDemand: 1
+## X-Sempre-Module: 1
+## X-Sempre-Budget-KB: 80
+## X-Sempre-LoadWith: Login
+## X-License: GPL-3.0-only
+
+Mail.lua
