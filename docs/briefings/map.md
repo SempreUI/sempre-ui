@@ -38,15 +38,15 @@ explored on other characters.
 3. **Explored by the account.** Each time the world map shows a zone, read
    `C_MapExplorationInfo.GetExploredMapTextures(uiMapID)` (a list of overlays:
    texture width and height, offset x and y, file data IDs, draw-on-top flag,
-   mouse-over flag) and store them account-wide per map in the module's saved
+   mouse-over flag; all sizes and offsets in map canvas units) and store them account-wide per map in the module's saved
    data, merged with what other characters stored (one entry per overlay,
    keyed by its offsets and first file data ID). When another character opens
    the same map, draw the stored overlays this character has not explored
    yet on the map canvas, desaturated and at 60 % alpha, so the player sees
    "explored on another character". Skip overlays marked as shown by mouse
-   over. Tile large overlays the same way the game does: overlays wider or
-   taller than 256 come as several file data IDs in a row-major grid of 256
-   pixel tiles; size the last row and column to what remains.
+   over. Tile large overlays by the tile size of the map's first art layer
+   (`C_Map.GetMapArtLayers`), row-major, with partial last tiles in a
+   power-of-two file (at least 16); draw nothing on other art layers.
    Option "Von anderen Charakteren erkundete Gebiete zeigen / Show areas
    explored on other characters" (default on).
 4. **Command** `/sempre karte` (alias `map`): prints the level range of the

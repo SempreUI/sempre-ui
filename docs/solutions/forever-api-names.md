@@ -16,3 +16,8 @@ exists in WoW: Forever.
   generated documentation; they still need a feature check.
 - A name that is called only behind a feature check, for a later client, goes
   into `tools/api-optional.txt` so the weekly API watch does not report it.
+- Names and fields are not enough for geometry: units, tile sizes and layer
+  indexes of map art come from the art layer info, not fixed constants. When
+  a briefing depends on such details, check how the game's own UI in the same
+  mirror uses the call (Blizzard code is reference, not addon code) and write
+  the facts into the briefing.
