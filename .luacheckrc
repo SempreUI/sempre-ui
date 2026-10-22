@@ -10,7 +10,9 @@ globals = {
 	"SempreItemsDB",
 	"SempreLedgerDB",
 	"SempreLootDB",
+	"SempreWayDB",
 	"SLASH_SEMPRE1",
+	"SLASH_SEMPREWAY1",
 	"SlashCmdList",
 }
 
@@ -77,6 +79,11 @@ read_globals = {
 	"UnitClassification",
 	"IsShiftKeyDown",
 	"C_Map",
+	"C_SuperTrack",
+	"UiMapPoint",
+	"CreateVector2D",
+	"WorldMapFrame",
+	"IsControlKeyDown",
 	"Settings",
 	"ReloadUI",
 	"CreateSettingsListSectionHeaderInitializer",
