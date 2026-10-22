@@ -20,6 +20,7 @@ S.News = {
 			{ de = "Wegpunkte mit /way: Pfeil in der Welt, Marker auf Minimap und Weltkarte", en = "Waypoints with /way: arrow in the world, markers on minimap and world map" },
 			{ de = "Minimap-Knöpfe anderer Addons hinter einem SempreUI-Knopf gesammelt", en = "Minimap buttons of other addons collected behind one SempreUI button" },
 			{ de = "Eigene Schriften für SempreUI-Fenster, auf Wunsch auch für das Spiel", en = "Own fonts for SempreUI windows, optionally for the game as well" },
+			{ de = "Dieses Fenster: Neuigkeiten nach jedem Update, jederzeit mit /sempre neu", en = "This window: what's new after each update, any time with /sempre news" },
 		},
 	},
 	{
