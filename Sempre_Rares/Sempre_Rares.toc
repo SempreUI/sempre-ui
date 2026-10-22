@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: |cffc8794aSempre|r Rares
+## Notes: Notices rare mobs that come into nameplate range: a sound, a banner with one click to target, and a list of where rares were seen.
+## Notes-deDE: Bemerkt seltene Gegner in Namensplatten-Reichweite: ein Ton, ein Banner mit einem Klick zum Anvisieren und eine Liste, wo Rares gesehen wurden.
+## Author: SempreUI
+## IconTexture: Interface\AddOns\Sempre\Media\Icon
+## Version: @project-version@
+## Dependencies: Sempre
+## LoadOnDemand: 1
+## SavedVariables: SempreRaresDB
+## X-Sempre-Module: 1
+## X-Sempre-Budget-KB: 40
+## X-Sempre-LoadWith: Login
+## X-License: GPL-3.0-only
+
+Rares.lua
