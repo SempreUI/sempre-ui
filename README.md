@@ -7,8 +7,8 @@ professions and gold. Every feature is its own module that loads only when
 you switch it on and when it is needed, so you pay in memory only for what
 you use.
 
-> Status: early development. The first public release is planned for the
-> Forever launch on 5 November 2026.
+> Status: alpha. Test versions are on CurseForge, Wago and GitHub Releases;
+> development continues alongside the Forever launch on 5 November 2026.
 
 ## Principles
 
@@ -18,6 +18,29 @@ you use.
 - **Works within Forever's rules.** In combat, addons may display but not
   decide. SempreUI never tries to work around that.
 - **One look.** Copper accent (`#C8794A`), calm dark surfaces, readable fonts.
+
+## Memory budgets
+
+Every module declares a memory budget in its TOC (`## X-Sempre-Budget-KB`).
+`/sempre perf` compares each loaded module with its budget, and a module that
+goes over it is a bug. Modules you switch off are never loaded and cost
+nothing.
+
+| Module | Budget |
+| --- | --- |
+| Sempre (core) | 300 KB |
+| Sempre_Items | 150 KB |
+| Sempre_Loot | 150 KB |
+| Sempre_Map | 120 KB |
+| Sempre_Ledger | 100 KB |
+| Sempre_Mail | 80 KB |
+| Sempre_Whisper | 80 KB |
+| Sempre_Way | 60 KB |
+| Sempre_Butler | 40 KB |
+| Sempre_Buttons | 40 KB |
+| Sempre_Rares | 40 KB |
+
+Everything switched on stays under 1.2 MB.
 
 ## Slash commands
 
