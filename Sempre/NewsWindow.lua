@@ -9,6 +9,9 @@
 -- The last seen version lives in SempreDB.global.newsSeen. The window has no
 -- global name (no globals beyond SempreUI), so it closes with its button only.
 -- Command: /sempre neu (news).
+-- For windows that must not collide with it: SempreUI:NewsBusy() is true while
+-- the window is open or still waiting to open, and the message NEWS_CLOSED is
+-- sent whenever it was closed.
 
 local S = SempreUI
 local L = S.L
@@ -113,7 +116,10 @@ local function build()
 	scroll:SetScrollChild(child)
 	fill(child)
 
-	frame:SetScript("OnHide", markSeen)
+	frame:SetScript("OnHide", function()
+		markSeen()
+		S:Send("NEWS_CLOSED")
+	end)
 	S.newsFrame = frame
 	ready = true
 end
@@ -123,6 +129,10 @@ function S:ShowNews()
 	pending = false
 	markSeen()
 	frame:Show()
+end
+
+function S:NewsBusy()
+	return pending == true or (frame ~= nil and frame:IsShown() == true)
 end
 
 local tryOpen

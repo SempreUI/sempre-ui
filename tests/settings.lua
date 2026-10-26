@@ -323,7 +323,7 @@ end
 do
 	local env = boot()
 	local S = env.S
-	check(env.sub("General") and #env.pageBoxes("General") == 4, "core page holds the login, font and news options")
+	check(env.sub("General") and #env.pageBoxes("General") == 5, "core page holds the login, font, news and compat options")
 	local box = env.pageBoxes("General")[1]
 	check(box.setting.name == "Login message in chat" and box.setting.default == true and box.tip:find("version", 1, true), "label, default and tooltip of the option")
 	box.setting.set(false)
@@ -376,6 +376,11 @@ do
 	env.printed = {}
 	cmd.modul("ledger")
 	check(env.out():find("Ledger: after /reload", 1, true), "name alone shows its state")
+	env.printed = {}
+	env.S.SetModuleEnabled("Sempre_Ledger", true, true)
+	check(env.addons.Sempre_Ledger.enabled == 2 and env.out() == "", "SetModuleEnabled switches like the checkbox, quiet prints nothing")
+	env.S.SetModuleEnabled("Sempre_Ledger", false)
+	check(env.addons.Sempre_Ledger.enabled == 0 and env.out():find("Ledger: after /reload", 1, true), "SetModuleEnabled without quiet reports the state")
 	env.printed = {}
 	cmd.modul("sempre an")
 	check(env.out():find("No module named sempre", 1, true) and env.addons.Sempre.enabled == 2, "the core cannot be switched")

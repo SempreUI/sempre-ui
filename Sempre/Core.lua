@@ -30,7 +30,7 @@ local L = setmetatable({}, { __index = function(_, k) return k end })
 S.L = L
 if GetLocale() == "deDE" then
 	L.LOADED = "geladen. /sempre für Befehle."
-	L.HELP = "Befehle: |cffc8794a/sempre optionen|r Einstellungen, |cffc8794a/sempre modul <Name> an|aus|r Modul schalten, |cffc8794a/sempre perf|r Speicher pro Modul, |cffc8794a/sempre fehler|r Fehlerliste, |cffc8794a/sempre neu|r Neuigkeiten, |cffc8794a/sempre version|r Version."
+	L.HELP = "Befehle: |cffc8794a/sempre optionen|r Einstellungen, |cffc8794a/sempre modul <Name> an|aus|r Modul schalten, |cffc8794a/sempre perf|r Speicher pro Modul, |cffc8794a/sempre fehler|r Fehlerliste, |cffc8794a/sempre neu|r Neuigkeiten, |cffc8794a/sempre vertraeglich|r doppelte Funktionen, |cffc8794a/sempre version|r Version."
 	L.PERF_HEADER = "Speicher pro Modul (KB, Budget in Klammern):"
 	L.PERF_TOTAL = "Gesamt"
 	L.OVER_BUDGET = "über Budget"
@@ -47,7 +47,7 @@ if GetLocale() == "deDE" then
 	L.SECRET = "<geheim>"
 else
 	L.LOADED = "loaded. /sempre for commands."
-	L.HELP = "Commands: |cffc8794a/sempre options|r settings, |cffc8794a/sempre module <name> on|off|r switch a module, |cffc8794a/sempre perf|r memory per module, |cffc8794a/sempre errors|r error list, |cffc8794a/sempre news|r what's new, |cffc8794a/sempre version|r version."
+	L.HELP = "Commands: |cffc8794a/sempre options|r settings, |cffc8794a/sempre module <name> on|off|r switch a module, |cffc8794a/sempre perf|r memory per module, |cffc8794a/sempre errors|r error list, |cffc8794a/sempre news|r what's new, |cffc8794a/sempre compat|r doubled functions, |cffc8794a/sempre version|r version."
 	L.PERF_HEADER = "Memory per module (KB, budget in brackets):"
 	L.PERF_TOTAL = "Total"
 	L.OVER_BUDGET = "over budget"
@@ -190,7 +190,7 @@ end
 local DB_VERSION = 1
 local defaults = {
 	version = DB_VERSION,
-	global = { errors = {}, options = {} },
+	global = { errors = {}, options = {}, compatAnswered = "" },
 	chars = {},
 	profiles = {},
 }
@@ -578,6 +578,11 @@ S:On("ADDON_LOADED", function(_, name)
 			key = "news", default = true,
 			label = { de = "Neuigkeiten nach Updates zeigen", en = "Show what's new after updates" },
 			tooltip = { de = "Öffnet nach einem Update einmal das Fenster mit den Neuigkeiten. /sempre neu öffnet es jederzeit.", en = "Opens the what's new window once after an update. /sempre news opens it at any time." },
+		},
+		{
+			key = "compat", default = true,
+			label = { de = "Auf doppelte Funktionen mit anderen Addons hinweisen", en = "Point out functions doubled by other addons" },
+			tooltip = { de = "Fragt nach dem Login, ob SempreUI-Teile abgeschaltet werden sollen, die EllesmereUI oder Naowh Forever schon erledigen. /sempre vertraeglich öffnet das Fenster jederzeit.", en = "After login, asks whether to switch off SempreUI parts that EllesmereUI or Naowh Forever already do. /sempre compat opens the window at any time." },
 		},
 	})
 end)
