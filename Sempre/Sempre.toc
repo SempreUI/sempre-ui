@@ -16,3 +16,4 @@ Fonts.lua
 Settings.lua
 News.lua
 NewsWindow.lua
+Compat.lua

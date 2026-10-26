@@ -417,6 +417,7 @@ dofile("tests/butler.lua")(check)
 dofile("tests/rares.lua")(check)
 dofile("tests/whisper.lua")(check)
 dofile("tests/news.lua")(check)
+dofile("tests/compat.lua")(check)
 dofile("tests/settings.lua")(check, same, { items = bootItems, loot = bootLoot })
 
 print(string.format("%d checks, %d failed", count, failures))

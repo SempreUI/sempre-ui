@@ -132,7 +132,9 @@ end
 local refreshRow
 
 -- Switches a module for all characters. Returns false when the client cannot.
-local function setModule(name, on)
+-- quiet: no chat lines (the caller reports). Also used by Compat.lua through
+-- SempreUI.SetModuleEnabled(name, on, quiet), the documented internal switch.
+local function setModule(name, on, quiet)
 	local api = C_AddOns
 	if not (api.EnableAddOn and api.DisableAddOn) then
 		S:Print(L.NO_ENABLE_API)
@@ -146,9 +148,10 @@ local function setModule(name, on)
 	else
 		api.DisableAddOn(name)
 	end
-	refreshRow(name)
+	refreshRow(name, quiet)
 	return true
 end
+S.SetModuleEnabled = setModule
 
 local function findModule(arg)
 	arg = arg:lower()
@@ -187,9 +190,11 @@ end
 
 -- Keeps the page in step after a switch. Every call is optional: a client
 -- without it keeps the page as built, the chat line says the result.
-refreshRow = function(name)
-	S:Print(L.MODULE_LINE, shortName(name), stateWord(name))
-	if stateOf(name) == "reload" then S:Print(L.RELOAD_NOTE) end
+refreshRow = function(name, quiet)
+	if not quiet then
+		S:Print(L.MODULE_LINE, shortName(name), stateWord(name))
+		if stateOf(name) == "reload" then S:Print(L.RELOAD_NOTE) end
+	end
 	if mode == "canvas" then
 		canvas.refresh()
 		return
