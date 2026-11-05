@@ -39,10 +39,15 @@ profession most cheaply. Plus a reminder when a profession cooldown is ready.
      game's own Forever profession UI calls `C_TradeSkillUI.GetFilteredRecipeIDs`
      (see `docs/solutions/forever-api-names.md`). Feature-detect, in this
      order, a function returning all recipe IDs (`GetAllRecipeIDs`), then
-     the filtered one; keep only learned recipes. Never change the player's
-     filters. Record which function was used in the snapshot, so the probe
-     shows it. When neither exists, print once that recipes cannot be read
-     in this client and keep the profession level only.
+     the filtered one, then **[probe]** the classic trade skill list
+     (`GetNumTradeSkills` with `GetTradeSkillInfo(index)` giving name, type
+     and difficulty, and `GetTradeSkillRecipeLink(index)` with the recipe
+     ID in the link; only when the two `C_TradeSkillUI` functions are
+     missing, and only for headers-and-recipes lists, where header rows are
+     skipped). Keep only learned recipes. Never change the player's filters.
+     Record which of the three ways was used in the snapshot, so the probe
+     shows it. When none exists, print once that recipes cannot be read in
+     this client and keep the profession level only.
    - Work in slices (about 50 recipes per frame) so opening the window never
      stutters. Re-read only recipes whose skill or difficulty changed and new
      recipes (`NEW_RECIPE_LEARNED`); `SKILL_LINES_CHANGED` updates skill
@@ -112,7 +117,12 @@ strings, reagents as a compact list. Budget 200 KB. Folder `Sempre_Craft`,
 
 ## Forever notes
 
-- Forever runs the modern profession frame in its own variant. Recipe
+- Forever runs the modern profession frame in its own variant. An addon
+  cannot open a profession window itself on Forever (the profession menu is
+  protected); the player opens it, the module reads along. Never try to
+  open, switch or refresh the profession frame from code, and never ask the
+  player to open all professions at once: one snapshot per opened window.
+- Recipe
   quality, concentration, specialisations and crafting orders exist in the
   API but are not part of Forever's classic professions; ignore them.
   Camping is a profession on Forever; treat it like any other.
@@ -128,8 +138,9 @@ queues that craft, auction posting, guild sharing.
 
 - `luacheck .` clean, `lua5.1 tests/run.lua` passes; new `tests/craft.lua`.
 - Tests cover: snapshot of own profession, skipped for linked, guild and NPC
-  crafting; learned-only; recipe list through either function and the
-  message when none exists; slicing; new recipe and skill change updates;
+  crafting; learned-only; recipe list through each of the three ways (two
+  functions, classic list with headers skipped) and the message when none
+  exists; slicing; new recipe and skill change updates;
   vendor reagent prices (unlimited stock only, cheapest kept); reagent cost
   order and the "own mats at cost" option; result value with faction and
   neutral cut and the 1 silver deposit, vendor fallback, enchant without

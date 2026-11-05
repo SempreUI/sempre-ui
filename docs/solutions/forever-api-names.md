@@ -36,3 +36,15 @@ exists in WoW: Forever.
   at most every 15 minutes, its index starts at 0, the owner field is empty,
   and `REPLICATE_ITEM_LIST_UPDATE` also fires when another addon started the
   scan. Treat them as assumptions with tests until a live check confirms them.
+- Known behaviour of the Forever auction house that a briefing must plan
+  for (reported by several addon authors, 2026-11-05): a full-listing
+  request sent while the server's 15-minute wait is running is ignored
+  silently, so every scan needs a timeout; item data inside a full listing
+  can arrive lazily (the per-listing "has all info" flag is false, name
+  missing) while price, count and item ID are present. Profession windows
+  cannot be opened by addons on Forever (protected menu); read them when the
+  player opens them. Recipe lists: feature-detect a function for all recipe
+  IDs, then the filtered list, then the classic `GetNumTradeSkills` list.
+- SavedVariables size: the client writes very large SavedVariables files
+  incompletely and loses them; keep every saved table under a hard cap and
+  prefer positional lists to named fields (about half the size).
