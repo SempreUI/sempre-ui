@@ -29,7 +29,12 @@ cancelling: that stays with Auctionator and the game's own frames.
    ID (17th return). The item link (`GetReplicateItemLink`) is only needed
    for gear with a random suffix. The owner is not given on Forever; never
    rely on it. Listings with no buyout (bid only) are counted but give no
-   price.
+   price. The 18th return says whether the item's data is loaded; when it is
+   false, the name and some fields may still be missing. Price, count and
+   item ID are present anyway, which is all the summary needs; never wait for
+   item data inside the read, and never request it for every listing (the
+   tooltip and the commands load an item's data on demand through
+   `C_Item.RequestLoadItemDataByID` and `ITEM_DATA_LOAD_RESULT`).
 2. **Scans started by other addons.** `REPLICATE_ITEM_LIST_UPDATE` also
    fires when Auctionator or another addon asked for the full listing. Read
    it the same way, so the player's normal Auctionator scans fill SempreUI's
@@ -40,7 +45,9 @@ cancelling: that stays with Auctionator and the game's own frames.
    the last listing arrived (account-wide per market, see below) and show the
    remaining wait on the button ("12:40"). If no answer arrives within 60
    seconds of a click, reset and print one line that the server's wait is
-   probably not over.
+   probably not over. The timeout is not optional: a request sent while the
+   server's wait is still running is ignored silently (no event, no error),
+   as other authors report.
 4. **Reading without freezing.** Never read the whole listing in one frame.
    Read in slices from an own frame's update with a time budget of about
    8 ms per frame (measure with `debugprofilestop`), collect per item the
@@ -81,11 +88,15 @@ cancelling: that stays with Auctionator and the game's own frames.
    = one pass through the list, never a loop.
 7. **Fallback: Auctionator.** When the memory has no value for an item that
    is younger than 7 days and Auctionator is loaded, ask Auctionator's public
-   read interface for its last price (Auctionator publishes a versioned API
-   for other addons; check the exact function name in its own API
-   documentation and feature-detect it). Mark such a value as "Auctionator"
-   in every display. Option, default on. Never store Auctionator's values in
-   the memory.
+   read interface, version 1: `Auctionator.API.v1.GetAuctionPriceByItemID`
+   with the caller name `"SempreUI"` and the item ID gives the last known
+   price in copper (nil when unknown), `GetAuctionAgeByItemID` the age in
+   days; `GetAuctionPriceByItemLink` exists for links. Feature-detect the
+   table and each function (`Auctionator.API.v1` may be missing or renamed
+   in a later version) and call them inside a protected call, never on the
+   tooltip path without a cached answer (cache per item for 60 seconds).
+   Mark such a value as "Auctionator" in every display. Option, default on.
+   Never store Auctionator's values in the memory.
 
 ## Which market
 
@@ -134,7 +145,13 @@ History per item and market:
 - Store each item's history as one compact string in the saved data and
   decode on demand; keep a small cache of decoded items (about 200, least
   recently used out). The builder chooses the encoding; it must survive a
-  damaged record by skipping it.
+  damaged record by skipping it. Positional lists (a value's meaning given by
+  its position) are preferred over named fields everywhere in the saved
+  data; they are about half the size on disk.
+- Every saved table has a hard cap (items per market, watch list 500,
+  commodity price steps in memory only). Very large SavedVariables files are
+  known to be written incompletely by the client, which loses the whole
+  file; the budget and the caps are the protection against that.
 
 Derived values (computed on demand, not stored):
 
@@ -227,7 +244,8 @@ disenchant values (Butler part 2).
 
 - `luacheck .` clean, `lua5.1 tests/run.lua` passes; new `tests/market.lua`
   run by `run.lua`.
-- Tests cover: market value rule with bait and outliers; day records, folding
+- Tests cover: market value rule with bait and outliers, and with gear that
+  has only one or two listings; day records, folding
   into weeks across a year boundary and dropping after 365 days; encode,
   decode and a damaged record; full read in slices with a stubbed listing
   (0-based), bid-only listings, suffix gear; a listing started by another
