@@ -21,3 +21,18 @@ exists in WoW: Forever.
   a briefing depends on such details, check how the game's own UI in the same
   mirror uses the call (Blizzard code is reference, not addon code) and write
   the facts into the briefing.
+- The generated documentation is not complete. Blizzard's own Forever
+  profession UI (`Blizzard_ProfessionsTemplates/Blizzard_Professions.lua` in
+  the same mirror) calls `C_TradeSkillUI.GetFilteredRecipeIDs`,
+  `GetRecipeLink`, `GetTradeSkillListLink`, `IsTradeSkillLinked`,
+  `IsTradeSkillGuild` and `GetRecipeCooldown`, none of which is in
+  `tools/api-forever.txt` (checked 2026-11-05). A name missing from the
+  snapshot is therefore not proof that it is missing from the client: search
+  the game's own UI code in the mirror as well, and when only the UI code
+  shows it, mark it **[probe]** in the briefing, feature-detect it and add it
+  to `tools/api-optional.txt`.
+- Auction house facts for Forever reported by other authors (not yet seen by
+  our own probe): the full listing (`C_AuctionHouse.ReplicateItems`) is sent
+  at most every 15 minutes, its index starts at 0, the owner field is empty,
+  and `REPLICATE_ITEM_LIST_UPDATE` also fires when another addon started the
+  scan. Treat them as assumptions with tests until a live check confirms them.
