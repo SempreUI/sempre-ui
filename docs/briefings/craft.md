@@ -98,6 +98,34 @@ profession most cheaply. Plus a reminder when a profession cooldown is ready.
    / "Craftable: ..."; on a reagent, "Gebraucht für 4 Rezepte" / "Used in 4
    recipes". No per-call table allocation on the tooltip path.
 
+10. **Target plan** (added 2026-11-10). `/sempre craft ziel <profession>
+    <skill>` (`target`): a plan from the current skill to the target with
+    the learned recipes only, cheapest first by rule 7. Build it greedily:
+    take the recipe with the lowest expected cost per point, plan crafts
+    until its expected points are used up or its colour will probably
+    change, then the next. The API gives only the current colour, not the
+    skill values where it changes, so the plan counts each recipe as at most
+    as many points as there are between now and the next five skill levels
+    for optimal, ten for medium and fifteen for easy, and labels the totals
+    "ca." / "approx.". Show: crafts per recipe, reagents to buy (minus what
+    all characters own, as in rule 6), total cost, expected end skill. When
+    the learned recipes run out before the target, say at which skill new
+    recipes from the trainer are needed; no trainer data. The plan becomes
+    the active shopping plan (rule 6) and is recomputed after every skill
+    change while the profession window is open, so the remaining crafts
+    follow the real skill-ups, not the estimate; when the target is reached,
+    print one line and clear it. Window tab "Ziel" / "Target".
+11. **Shopping list to Auctionator** (added 2026-11-10). A button on the plan
+    tab and `/sempre craft auctionator` turn the active plan's items to buy
+    into an Auctionator shopping list named "SempreUI <profession> <target>"
+    (replaced on every export), each entry exact by name with the quantity.
+    Use Auctionator's public interface, version 1, for creating a shopping
+    list from search terms **[probe]**: feature-detect the table and each
+    function, call inside a protected call, caller name "SempreUI". When it
+    is missing, show a copy box with one line per item (name and quantity)
+    and say that the Auctionator import was not available. Buying stays with
+    Auctionator and the player's clicks.
+
 ## Interface for other modules
 
 Read-only on `SempreUI.Craft`: `GetRecipesForItem(itemID)` (who can craft
@@ -146,7 +174,9 @@ queues that craft, auction posting, guild sharing.
   neutral cut and the 1 silver deposit, vendor fallback, enchant without
   result; profit list sort with unknown costs last and the three filters;
   mats coverage across characters; shopping plan minus stock; skill-up
-  ranking; cooldown stored and listed; tooltip lines; interface returns
+  ranking; target plan (greedy order, per-colour point cap, "ca." totals,
+  recipes running out before the target, recompute on skill change, clear on
+  reaching it); Auctionator export with and without the interface; cooldown stored and listed; tooltip lines; interface returns
   without Sempre_Market loaded (values unknown, no error).
 - In the live client (Oliver): open each profession once on two characters,
   `/sempre craft`, one plan, one skill list; report which recipe list
