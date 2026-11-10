@@ -165,6 +165,74 @@ Derived values (computed on demand, not stored):
 - **depth**: cost to buy the next N units now, only from the price steps of
   a commodity search younger than 30 minutes; else unknown.
 
+## Buy and sell windows (added 2026-11-10)
+
+Prices on Forever swing over the day and the week: low in the morning and
+on Friday and Saturday, highest on raid evenings (Tuesday and Thursday from
+about 18:00 local time). A single market value hides that. This part tells
+the player at what price and when to buy, and at what price and when to
+sell. The idea comes from a public talk about price bands on another game's
+market (percentiles of observed prices instead of averages, how regular the
+extremes are); no code or data layout of anyone is used.
+
+**Observations.** For stack goods and for watched or owned items, keep the
+last observations of the past 28 days as an additional compact list per
+item: time (hour precision, server time from `GetServerTime`), lowest
+unit price, market value. At most one entry per item per hour (a later
+observation in the same hour replaces the earlier one), at most 120 entries
+per item, oldest out. Same encoding rules and damage handling as the
+history. Other gear keeps no observations. Count the new list in the
+budget; raise `X-Sempre-Budget-KB` only if `/sempre perf` with a full
+listing proves it necessary, and say so in the README.
+
+**Values** (on demand, not stored; only with at least 12 observations on at
+least 5 different days, else unknown):
+
+- **buy price**: the 10th percentile of the observed lowest prices;
+- **sell price**: the 90th percentile of the observed market values;
+- **margin**: sell price times (1 minus the cut) minus buy price, cut 5 % on
+  a faction market and 15 % on the neutral one. Show it only when positive.
+  When the auction house is open, add the deposit for one posting of a
+  typical stack (`C_AuctionHouse.CalculateCommodityDeposit` or
+  `CalculateItemDeposit`, feature-detected, 24 hours) as "risk if unsold";
+  the deposit of at least 1 silver is lost when the auction does not sell;
+- **regularity**: on how many of the last 14 days the lowest price was at or
+  below the buy price, and on how many the market value was at or above the
+  sell price ("an 9 von 14 Tagen"). This replaces a formal entropy measure:
+  it answers the same question (does the good price come back regularly or
+  was it a one-off) in words the player understands;
+- **best times**: group the observations into 28 slots (7 weekdays times
+  4 parts of the day: night 0-6, morning 6-12, afternoon 12-18, evening
+  18-24, local time from `date`). Name the slot with the lowest median of
+  the lowest prices as best buying time and the slot with the highest median
+  market value as best selling time, each only when the slot has at least
+  3 observations and differs from the overall median by at least 5 %.
+  Otherwise say "kein Muster" / "no pattern".
+
+**Honesty rules.** The values are only as good as the scans: a player who
+scans only in the evening never sees the morning low. Show the number of
+observations and the slots covered, and print once per item in the command
+output when fewer than 3 of the 4 parts of the day have data ("nur abends
+gescannt"). Never call a value a forecast.
+
+**Display.** Shift tooltip, a third line when known: "Kaufen ≤ 2s 40c
+(Di morgens) · Verkaufen ≥ 3s 10c (Do abends) · Marge 55c" / "Buy ≤ ...".
+`/sempre markt <item>` adds a block with buy price, sell price, margin,
+regularity, best times and observation count. New command
+`/sempre markt chancen` (`deals`): up to 15 watched or owned stack goods
+ranked by margin times usual offer, only with regularity of at least 5 of
+14 days on both sides, one line each.
+
+**Interface.** `SempreUI.Market.GetWindows(item)`: buy price, sell price,
+margin (faction cut), buy regularity, sell regularity, best buy slot, best
+sell slot, observation count; nil when unknown. Same no-allocation rule on
+the tooltip path (cache per item until the next `MARKET_UPDATED`).
+
+**Tests.** Percentiles with fixtures (bait stack does not move them),
+minimum data rule, margin with 5 % and 15 % cut, regularity counting, slot
+choice with and without a clear pattern, one entry per hour, 120-entry cap,
+"nur abends gescannt" hint, `chancen` ranking and filter.
+
 ## Size limits
 
 Budget `## X-Sempre-Budget-KB: 1500` (the one large module; update the
@@ -256,6 +324,7 @@ disenchant values (Butler part 2).
   faction auctioneers and with a ruleset word in the realm name; Auctionator
   fallback marked and not stored; trend needs 3 days; turnover estimate;
   depth only within 30 minutes; item cap keeps watched and owned items;
+  buy and sell windows (see their tests);
   tooltip lines with and without Shift; interface returns; no owner or
   player name stored anywhere.
 - In the live client (Oliver, after the first evening): one full scan, one
